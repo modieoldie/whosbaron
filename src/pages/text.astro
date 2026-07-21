@@ -1,0 +1,143 @@
+---
+import Base from "../layouts/Base.astro";
+import { profile, projects, experience, education, skills } from "../data/content";
+---
+
+<Base title={`${profile.name} — Text version`}>
+  <main class="mx-auto max-w-3xl px-6 py-20">
+    <a
+      href="/"
+      class="font-mono text-[0.6875rem] tracking-[0.2em] text-ash-dim uppercase transition-colors hover:text-brass"
+      >← Back to the room</a
+    >
+
+    <header class="mt-12">
+      <p class="marker">{profile.location}</p>
+      <h1 class="mt-5 font-serif text-6xl leading-[0.95] font-light tracking-tight text-bone">
+        {profile.name}
+      </h1>
+      <p class="mt-6 max-w-xl font-mono text-sm leading-relaxed text-ash">{profile.tagline}</p>
+
+      <div class="mt-8 flex flex-wrap gap-x-8 gap-y-3">
+        <a href={`mailto:${profile.email}`} class="font-mono text-xs text-bone hover:text-brass"
+          >{profile.email}</a
+        >
+        <a href={profile.resume} class="font-mono text-xs text-brass">Résumé (PDF)</a>
+        <a href={profile.github} class="font-mono text-xs text-ash hover:text-brass">GitHub</a>
+        <a href={profile.linkedin} class="font-mono text-xs text-ash hover:text-brass">LinkedIn</a>
+      </div>
+    </header>
+
+    <section class="mt-20">
+      <p class="marker">— 01 / Projects</p>
+      {
+        projects.map((project) => (
+          <article class="hairline mt-10 pt-10">
+            <div class="flex flex-col gap-1 md:flex-row md:items-baseline md:justify-between">
+              <h2 class="font-serif text-3xl font-light text-bone">{project.title}</h2>
+              <span class="font-mono text-[0.6875rem] tracking-[0.14em] text-ash-dim uppercase">
+                {project.period}
+              </span>
+            </div>
+            <p class="mt-4 max-w-2xl text-sm leading-relaxed text-ash">{project.blurb}</p>
+            <div class="mt-5 flex flex-wrap gap-2">
+              {project.stack.map((item) => (
+                <span class="chip">{item}</span>
+              ))}
+            </div>
+            <ul class="mt-6 max-w-2xl space-y-2.5">
+              {project.bullets.map((bullet) => (
+                <li class="flex gap-3 text-sm leading-relaxed text-ash">
+                  <span class="mt-2 h-px w-3 shrink-0 bg-brass-dim" />
+                  <span>{bullet}</span>
+                </li>
+              ))}
+            </ul>
+            {project.demo && (
+              <a
+                href={project.demo}
+                target="_blank"
+                rel="noopener noreferrer"
+                class="mt-6 inline-block font-mono text-xs tracking-[0.2em] text-brass uppercase"
+              >
+                Live demo ↗
+              </a>
+            )}
+          </article>
+        ))
+      }
+    </section>
+
+    <section class="mt-20">
+      <p class="marker">— 02 / Experience & Education</p>
+      {
+        experience.map((role) => (
+          <div class="hairline mt-10 pt-10">
+            <h2 class="font-serif text-3xl font-light text-bone">{role.role}</h2>
+            <p class="mt-2 font-mono text-xs tracking-[0.12em] text-brass-dim uppercase">
+              {role.org} · {role.location} · {role.period}
+            </p>
+            <ul class="mt-5 max-w-2xl space-y-2.5">
+              {role.bullets.map((bullet) => (
+                <li class="flex gap-3 text-sm leading-relaxed text-ash">
+                  <span class="mt-2 h-px w-3 shrink-0 bg-brass-dim" />
+                  <span>{bullet}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))
+      }
+      {
+        education.map((school) => (
+          <div class="hairline mt-10 pt-10">
+            <h2 class="font-serif text-3xl font-light text-bone">{school.school}</h2>
+            <p class="mt-2 font-mono text-xs tracking-[0.12em] text-brass-dim uppercase">
+              {school.degree} · {school.location} · {school.period}
+            </p>
+            <p class="mt-4 text-sm text-ash-dim">{school.detail}</p>
+          </div>
+        ))
+      }
+    </section>
+
+    <section class="mt-20">
+      <p class="marker">— 03 / Skills</p>
+      <div class="mt-10 grid gap-x-12 gap-y-10 sm:grid-cols-2">
+        {
+          skills.map((group) => (
+            <div>
+              <h3 class="font-mono text-[0.6875rem] tracking-[0.22em] text-brass-dim uppercase">
+                {group.group}
+              </h3>
+              <div class="mt-4 flex flex-wrap gap-2">
+                {group.items.map((item) => (
+                  <span class="chip">{item}</span>
+                ))}
+              </div>
+            </div>
+          ))
+        }
+      </div>
+    </section>
+
+    <footer class="hairline mt-20 py-12">
+      <p class="font-mono text-[0.6875rem] tracking-[0.14em] text-ash-dim uppercase">
+        {profile.name} · {profile.location} · whosbaron.com
+      </p>
+    </footer>
+  </main>
+</Base>
+
+<style is:global>
+  /* The room locks scrolling; this page is the one that needs it back. */
+  html,
+  body {
+    overflow: auto;
+    height: auto;
+  }
+
+  .hairline {
+    border-top: 1px solid var(--color-hairline);
+  }
+</style>
