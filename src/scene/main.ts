@@ -17,7 +17,9 @@ import { OutputPass } from "three/examples/jsm/postprocessing/OutputPass.js";
 import { buildRoom, ROOM_CENTER_Z } from "./room";
 import { buildDesk, MONITOR_X, SCREEN_W, SCREEN_Y, SCREEN_Z } from "./desk";
 import { buildProps } from "./props";
-import { ProjectsScreen, AboutScreen, ConwayScreen } from "./screens";
+import { buildFigure } from "./figure";
+import { ProjectsScreen, AboutScreen, ConwayScreen, PhoneScreen } from "./screens";
+import { ScreenGlow } from "./glow";
 import { Interaction } from "./interaction";
 import { PropMarkers } from "./markers";
 import type { CardContent, HotspotAction, Hotspot } from "./types";
@@ -87,6 +89,10 @@ const HINTS: Record<ViewName, string> = {
 // How long to wait on the Google Fonts request before painting the monitors
 // with whatever is available.
 const FONT_TIMEOUT_MS = 3000;
+
+// Fraction of the flight the figure's dissolve occupies. Short enough that he
+// is gone well before the camera arrives where he is sitting.
+const DISSOLVE_SPAN = 0.55;
 
 const easeInOutCubic = (t: number) =>
   t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
@@ -176,7 +182,7 @@ export async function boot() {
   // No walls, so no arc to clamp: the room is open all the way round and you
   // can swing to the front of the desk and look back at him.
   controls.rotateSpeed = 0.6;
-  controls.zoomSpeed = 0.7;
+  controls.zoomSpeed = 2.0;
 
   /* ---------------------------- content ---------------------------- */
 
@@ -184,11 +190,27 @@ export async function boot() {
     projects: new ProjectsScreen(),
     about: new AboutScreen(),
     conway: new ConwayScreen(),
+    phone: new PhoneScreen(),
   };
 
-  buildRoom(scene);
+  const room = buildRoom(scene);
   const desk = buildDesk(scene, screens);
-  const props = buildProps(scene, screens.conway);
+  const props = buildProps(scene, screens.conway, screens.phone);
+
+  // The monitors' spill never sits still: it breathes a few percent and takes
+  // its cast from whatever the panel is showing.
+  const glow = new ScreenGlow([
+    { light: room.screenGlow[0]!, source: screens.projects, tint: 0.3, breath: 0.045 },
+    { light: room.screenGlow[1]!, source: screens.about, tint: 0.3, breath: 0.045 },
+  ]);
+
+  // Dropped onto the chair rather than positioned by eye: the figure is built
+  // at true room heights, so copying the chair's own transform is the whole
+  // placement, and moving the chair moves him with it.
+  const figure = buildFigure();
+  figure.group.position.copy(desk.chair.position);
+  figure.group.rotation.y = desk.chair.rotation.y;
+  scene.add(figure.group);
 
   /* ---------------------------- hotspots --------------------------- */
 
@@ -273,6 +295,24 @@ export async function boot() {
     dom.hint.dataset.visible = "true";
     dom.back.dataset.visible = String(next === "desk");
     if (next === "desk") closeCard();
+  }
+
+  /**
+   * How solid the figure is this frame. He owns the orbit view and obstructs
+   * the desk one — you fly to the monitors and he is sitting in front of them —
+   * so the flight in dissolves him.
+   *
+   * Front-loaded on the way in and back-loaded on the way out, both against the
+   * eased camera progress rather than raw time: he has to be gone before the
+   * camera reaches him, and on the way back he should not fade up until the
+   * chair is far enough away to see the whole of him arrive.
+   */
+  function figureOpacity(): number {
+    if (!tween) return view === "desk" ? 0 : 1;
+    const k = easeInOutCubic(tween.t);
+    return view === "desk"
+      ? 1 - Math.min(k / DISSOLVE_SPAN, 1)
+      : Math.max(0, (k - (1 - DISSOLVE_SPAN)) / DISSOLVE_SPAN);
   }
 
   function finishTween() {
@@ -439,9 +479,19 @@ export async function boot() {
 
     screens.about.update(dt);
     screens.conway.update(dt);
+    screens.phone.update(dt);
     screens.projects.render();
     screens.about.render();
     screens.conway.render();
+    screens.phone.render();
+    // After the repaints, so a screen that just changed is sampled this frame
+    // rather than the next one.
+    glow.update(elapsed, dt);
+
+    // Driven every frame even while he is dissolved out: the idle is built from
+    // continuous sines, and freezing it would mean he snaps to a new pose the
+    // moment he fades back in at the end of the flight out.
+    figure.update(elapsed);
 
     if (tween) {
       tween.t = Math.min(tween.t + dt / tween.duration, 1);
@@ -461,6 +511,8 @@ export async function boot() {
     } else {
       controls.update();
     }
+
+    figure.setOpacity(figureOpacity());
 
     interaction.update();
     propMarkers.update(elapsed, interaction.hoveredId, view === "orbit" && !tween);
