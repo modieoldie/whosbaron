@@ -8,7 +8,7 @@ interface Props {
 }
 
 const {
-  title = `${profile.name} — Software Engineer`,
+  title = profile.name,
   description = profile.tagline,
 } = Astro.props;
 ---
