@@ -8,7 +8,12 @@ import * as THREE from "three";
 import { HEX } from "./palette";
 import { DESK_TOP_Y, DESK_CENTER_Z, DESK_DEPTH } from "./desk";
 import { RADIAL, RINGS, roundedBox, strut } from "./geometry";
-import { makeResumeTexture, makeDiplomaTexture, type ConwayScreen } from "./screens";
+import {
+  makeResumeTexture,
+  makeDiplomaTexture,
+  type ConwayScreen,
+  type PhoneScreen,
+} from "./screens";
 import { profile, projects, education, skills } from "../data/content";
 import type { Hotspot } from "./types";
 
@@ -18,7 +23,11 @@ export interface PropsRig {
   hotspots: Hotspot[];
 }
 
-export function buildProps(scene: THREE.Scene, conway: ConwayScreen): PropsRig {
+export function buildProps(
+  scene: THREE.Scene,
+  conway: ConwayScreen,
+  phoneUi: PhoneScreen,
+): PropsRig {
   const group = new THREE.Group();
   scene.add(group);
 
@@ -414,7 +423,7 @@ export function buildProps(scene: THREE.Scene, conway: ConwayScreen): PropsRig {
 
   const phoneScreen = new THREE.Mesh(
     new THREE.PlaneGeometry(0.062, 0.134),
-    new THREE.MeshBasicMaterial({ color: 0x11161d, toneMapped: false }),
+    new THREE.MeshBasicMaterial({ map: phoneUi.texture, toneMapped: false }),
   );
   phoneScreen.rotation.x = -Math.PI / 2;
   phoneScreen.position.y = 0.0045;
