@@ -2,10 +2,7 @@
  * Everything that glows in this room is a 2D canvas painted into a CanvasTexture.
  *
  * The monitors are the whole point of the scene, so they get real UI rather than
- * a screenshot: the left one is a browsable project list, the right one is the
- * `whoami` card — who he is, when he graduates, and how to reach him. Both
- * redraw only when something actually changed — a 60fps canvas repaint of static
- * text is a great way to cook a laptop for no reason.
+ * a screenshot
  */
 
 import * as THREE from "three";
@@ -16,22 +13,40 @@ const SERIF = '"Cormorant Garamond", Georgia, serif';
 
 /**
  * Height of the window chrome on every screen.
- *
- * Type on these canvases is sized against one constraint: a 1024px-wide texture
- * lands on roughly 800 screen pixels once the desk view has framed both
- * monitors. Anything under ~18px here arrives smaller than 14px real and stops
- * being readable, which is why the numbers below look large for a "UI".
  */
 const TITLE_BAR = 56;
 
 /**
  * A clickable line on a screen, positioned in that screen's content space.
- * Both monitors put links on glass, so both hit-test them the same way.
  */
 export type ScreenLink = { href: string; label: string; text: string; x: number; y: number; w: number };
 
 /** Padding around a link's painted box, so a near-miss still counts as a hit. */
 const LINK_PAD = { x: 10, top: 22, bottom: 10 };
+
+/**
+ * Side of the square every screen is averaged down to before its colour is read.
+ * One pixel would do the job in theory, but a single-step downscale to 1×1 is
+ * the case browsers filter worst — 8×8 costs nothing and is actually a mean.
+ */
+const SAMPLE_N = 8;
+
+/** One scratch canvas serves every screen; sampling is never re-entrant. */
+let samplerCtx: CanvasRenderingContext2D | null = null;
+function sampler(): CanvasRenderingContext2D {
+  if (samplerCtx) return samplerCtx;
+  const canvas = document.createElement("canvas");
+  canvas.width = SAMPLE_N;
+  canvas.height = SAMPLE_N;
+  samplerCtx = canvas.getContext("2d", { willReadFrequently: true })!;
+  samplerCtx.imageSmoothingQuality = "high";
+  return samplerCtx;
+}
+
+/**
+ * How hard the sampled cast is pushed before a light is allowed to use it.
+ */
+const SAMPLE_SATURATE = 2.2;
 
 /** Index of the link under a content-space point, or -1. */
 function linkIndexAt(links: ScreenLink[], x: number, y: number): number {
@@ -80,6 +95,46 @@ abstract class CanvasScreen {
     this.draw();
     this.texture.needsUpdate = true;
     this.dirty = false;
+    this.castStale = true;
+  }
+
+  /* ------------------------------ colour ----------------------------- */
+
+  private readonly cast = new THREE.Color(1, 1, 1);
+  private castStale = true;
+
+  /**
+   * Recomputed only after a repaint — the screens already redraw on change rather than on a clock, 
+   * so this rides that for freeinstead of reading back a canvas every frame.
+   */
+  screenCast(): THREE.Color {
+    if (!this.castStale) return this.cast;
+    this.castStale = false;
+
+    const s = sampler();
+    s.clearRect(0, 0, SAMPLE_N, SAMPLE_N);
+    s.drawImage(this.canvas, 0, 0, SAMPLE_N, SAMPLE_N);
+    const { data } = s.getImageData(0, 0, SAMPLE_N, SAMPLE_N);
+
+    let r = 0;
+    let g = 0;
+    let b = 0;
+    for (let i = 0; i < data.length; i += 4) {
+      r += data[i]!;
+      g += data[i + 1]!;
+      b += data[i + 2]!;
+    }
+
+    // Divide by the peak channel rather than the pixel count: brightness is the
+    // job of the light's intensity, and a screen that happens to be showing a
+    // dark project should not quietly dim the desk.
+    const peak = Math.max(r, g, b, 1);
+    this.cast.setRGB(r / peak, g / peak, b / peak, THREE.SRGBColorSpace);
+
+    const hsl = { h: 0, s: 0, l: 0 };
+    this.cast.getHSL(hsl);
+    this.cast.setHSL(hsl.h, Math.min(1, hsl.s * SAMPLE_SATURATE), hsl.l);
+    return this.cast;
   }
 
   protected abstract draw(): void;
@@ -882,10 +937,219 @@ export class ConwayScreen extends CanvasScreen {
     for (let y = 0; y < this.rows; y++) {
       for (let x = 0; x < this.cols; x++) {
         if (!this.grid[y * this.cols + x]) continue;
-        c.fillStyle = CSS.brass;
+        // Phosphor green rather than the room's brass, so the tablet reads as its
+        // own device running its own thing rather than as a third monitor.
+        c.fillStyle = CSS.green;
         c.fillRect(x * cw + 1, y * ch + 1, cw - 2, ch - 2);
       }
     }
+  }
+}
+
+/* ------------------------------------------------------- *
+ * The phone face-up on the desk — a lock screen, awake.   
+ * notificationarrives, sits for a few seconds and fades,  
+ *  the phone goes back to the clock. 
+ * ------------------------------------------------------- */
+
+/** Seconds between notifications. Everything below is an offset into one cycle. */
+const PHONE_CYCLE = 20;
+
+/**
+ * The banner's life inside a cycle, in seconds. The slow fade out
+ */
+const BANNER = { in: 0.45, hold: 6.5, out: 8.6 };
+
+/**
+ * What comes in.
+ */
+const BANNER_FEED: { app: string; badge: string; title: string; body: string }[] = [
+  { app: "MAIL", badge: "M", title: "Recruiting", body: "Re: Summer 2027 internship" },
+  { app: "GITHUB", badge: "G", title: "whosbaron", body: "All checks passed on main" },
+  { app: "CALENDAR", badge: "C", title: "Standup", body: "In 15 minutes · Zoom" },
+];
+
+/** The lock screen's own palette. Dimmer than the monitors*/
+const PHONE = {
+  top: "#0d1117",
+  bottom: "#151b26",
+  bright: "#c5cdd9",
+  dim: "#6f7a8a",
+  banner: "rgba(232,238,246,0.10)",
+  bannerEdge: "rgba(232,238,246,0.16)",
+} as const;
+
+const smoothstep = (t: number) => t * t * (3 - 2 * t);
+
+export class PhoneScreen extends CanvasScreen {
+  /** Position within the current cycle. */
+  private t = 0;
+  private banner = 0;
+  private alpha = 0;
+  private clock = "";
+
+  constructor() {
+    // Portrait, matching the 0.062 × 0.134 slab it is painted onto.
+    super(256, 552);
+    this.clock = this.clockAt();
+  }
+
+  /** Banner opacity at a point in the cycle. */
+  private alphaAt(t: number): number {
+    if (t < BANNER.in) return smoothstep(t / BANNER.in);
+    if (t < BANNER.hold) return 1;
+    if (t < BANNER.out) return 1 - smoothstep((t - BANNER.hold) / (BANNER.out - BANNER.hold));
+    return 0;
+  }
+
+  /** Real wall-clock time */
+  private clockAt(): string {
+    const now = new Date();
+    return `${now.getHours() % 12 || 12}:${String(now.getMinutes()).padStart(2, "0")}`;
+  }
+
+  update(dt: number) {
+    this.t += dt;
+    if (this.t >= PHONE_CYCLE) {
+      this.t -= PHONE_CYCLE;
+      this.banner = (this.banner + 1) % BANNER_FEED.length;
+    }
+
+    // Repaint only while the banner is actually moving, and once a minute for the clock.
+    const alpha = this.alphaAt(this.t);
+    if (Math.abs(alpha - this.alpha) > 0.002) {
+      this.alpha = alpha;
+      this.invalidate();
+    }
+
+    const clock = this.clockAt();
+    if (clock !== this.clock) {
+      this.clock = clock;
+      this.invalidate();
+    }
+  }
+
+  protected draw() {
+    const c = this.ctx;
+
+    const wash = c.createLinearGradient(0, 0, 0, this.height);
+    wash.addColorStop(0, PHONE.top);
+    wash.addColorStop(1, PHONE.bottom);
+    c.fillStyle = wash;
+    c.fillRect(0, 0, this.width, this.height);
+
+    this.statusBar();
+    this.lockClock();
+    if (this.alpha > 0.002) this.bannerCard();
+
+    // Home indicator
+    c.fillStyle = "rgba(197,205,217,0.30)";
+    this.roundRect(this.width / 2 - 42, this.height - 22, 84, 5, 3);
+    c.fill();
+  }
+
+  private statusBar() {
+    const c = this.ctx;
+    c.textBaseline = "middle";
+
+    c.font = `500 17px ${MONO}`;
+    c.fillStyle = PHONE.bright;
+    c.fillText(this.clock, 20, 32);
+
+    // Battery: a pill and a fill that stops short of full.
+    const bx = this.width - 46;
+    c.strokeStyle = "rgba(197,205,217,0.45)";
+    c.lineWidth = 1.5;
+    this.roundRect(bx, 24, 26, 14, 4);
+    c.stroke();
+    c.fillStyle = "rgba(197,205,217,0.45)";
+    c.fillRect(bx + 27, 28, 2.5, 6);
+    c.fillStyle = PHONE.bright;
+    this.roundRect(bx + 2.5, 26.5, 17, 9, 2);
+    c.fill();
+
+    // Signal: four rising bars, the last one unlit.
+    for (let i = 0; i < 4; i++) {
+      const h = 4 + i * 3;
+      c.fillStyle = i === 3 ? "rgba(197,205,217,0.28)" : PHONE.bright;
+      c.fillRect(this.width - 84 + i * 7, 37 - h, 4, h);
+    }
+
+    c.textBaseline = "alphabetic";
+  }
+
+  private lockClock() {
+    const c = this.ctx;
+    c.textAlign = "center";
+
+    c.font = `200 76px ${SANS}`;
+    c.fillStyle = PHONE.bright;
+    c.fillText(this.clock, this.width / 2, 168);
+
+    c.font = `400 15px ${MONO}`;
+    c.fillStyle = PHONE.dim;
+    const now = new Date();
+    c.fillText(
+      now
+        .toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })
+        .toUpperCase(),
+      this.width / 2,
+      196,
+    );
+
+    c.textAlign = "left";
+  }
+
+  /**
+   * The frosted banner. Everything inside it rides one `globalAlpha`, so the
+   * whole card fades as a unit rather than dissolving piece by piece.
+   */
+  private bannerCard() {
+    const c = this.ctx;
+    const x = 14;
+    const w = this.width - 28;
+    const y = 240;
+    const h = 92;
+    const item = BANNER_FEED[this.banner]!;
+
+    c.save();
+    c.globalAlpha = this.alpha;
+
+    c.fillStyle = PHONE.banner;
+    this.roundRect(x, y, w, h, 18);
+    c.fill();
+    c.strokeStyle = PHONE.bannerEdge;
+    c.lineWidth = 1;
+    c.stroke();
+
+    // App tile.
+    c.fillStyle = CSS.brassDim;
+    this.roundRect(x + 16, y + 16, 30, 30, 8);
+    c.fill();
+    c.font = `600 17px ${SANS}`;
+    c.fillStyle = "#12100a";
+    c.textAlign = "center";
+    c.fillText(item.badge, x + 31, y + 37);
+    c.textAlign = "left";
+
+    const textX = x + 58;
+
+    c.font = `500 13px ${MONO}`;
+    c.fillStyle = PHONE.dim;
+    c.fillText(item.app, textX, y + 27);
+    c.textAlign = "right";
+    c.fillText("NOW", x + w - 16, y + 27);
+    c.textAlign = "left";
+
+    c.font = `600 17px ${SANS}`;
+    c.fillStyle = PHONE.bright;
+    c.fillText(item.title, textX, y + 52);
+
+    c.font = `400 15px ${SANS}`;
+    c.fillStyle = PHONE.dim;
+    c.fillText(this.wrap(item.body, w - 74, 1)[0]!, textX, y + 74);
+
+    c.restore();
   }
 }
 
