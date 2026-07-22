@@ -18,6 +18,9 @@ import { buildRoom, ROOM_CENTER_Z } from "./room";
 import { buildDesk, MONITOR_X, SCREEN_W, SCREEN_Y, SCREEN_Z } from "./desk";
 import { buildProps } from "./props";
 import { buildFigure } from "./figure";
+import { buildCat } from "./cat";
+import { buildSunbeam } from "./sunbeam";
+import { buildDust } from "./dust";
 import { ProjectsScreen, AboutScreen, ConwayScreen, PhoneScreen } from "./screens";
 import { ScreenGlow } from "./glow";
 import { Interaction } from "./interaction";
@@ -196,6 +199,11 @@ export async function boot() {
   const room = buildRoom(scene);
   const desk = buildDesk(scene, screens);
   const props = buildProps(scene, screens.conway, screens.phone);
+  const cat = buildCat(scene);
+  // After the room, so the additive passes sort on top of the surfaces.
+  const sunbeam = buildSunbeam(scene);
+  const dust = buildDust(scene);
+  dust.setPixelRatio(quality.pixelRatio);
 
   // The monitors' spill never sits still: it breathes a few percent and takes
   // its cast from whatever the panel is showing.
@@ -487,11 +495,16 @@ export async function boot() {
     // After the repaints, so a screen that just changed is sampled this frame
     // rather than the next one.
     glow.update(elapsed, dt);
+    sunbeam.update(elapsed);
+    dust.update(elapsed);
 
     // Driven every frame even while he is dissolved out: the idle is built from
     // continuous sines, and freezing it would mean he snaps to a new pose the
     // moment he fades back in at the end of the flight out.
     figure.update(elapsed);
+    // She stays put through the flight in: on the desk, not in the way of it,
+    // so unlike him she never dissolves.
+    cat.update(elapsed);
 
     if (tween) {
       tween.t = Math.min(tween.t + dt / tween.duration, 1);
@@ -512,7 +525,11 @@ export async function boot() {
       controls.update();
     }
 
-    figure.setOpacity(figureOpacity());
+    // Dust rides the figure's curve: both belong to the room, and both are in
+    // the way once the camera is at the monitors.
+    const presence = figureOpacity();
+    figure.setOpacity(presence);
+    dust.setPresence(presence);
 
     interaction.update();
     propMarkers.update(elapsed, interaction.hoveredId, view === "orbit" && !tween);

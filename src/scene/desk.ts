@@ -12,6 +12,7 @@ import { RADIAL, RINGS, roundedBox, strut } from "./geometry";
 import type { ProjectsScreen, AboutScreen } from "./screens";
 
 export const DESK_TOP_Y = 0.74;
+export const DESK_WIDTH = 2.12;
 export const DESK_CENTER_Z = -1.1;
 export const DESK_DEPTH = 0.92;
 export const DESK_THICKNESS = 0.038;
@@ -68,7 +69,7 @@ export function buildDesk(
 
   /* ------------------------------ desk ------------------------------ */
 
-  const deskTop = new THREE.Mesh(roundedBox(2.12, DESK_THICKNESS, DESK_DEPTH, 0.012), white);
+  const deskTop = new THREE.Mesh(roundedBox(DESK_WIDTH, DESK_THICKNESS, DESK_DEPTH, 0.012), white);
   deskTop.position.set(0, DESK_TOP_Y - DESK_THICKNESS / 2, DESK_CENTER_Z);
   group.add(deskTop);
 
