@@ -777,7 +777,7 @@ export class AboutScreen extends CanvasScreen {
     c.font = `400 15px ${MONO}`;
     c.fillStyle = CSS.brassDim;
     c.fillText(
-      `SOFTWARE ENGINEER · ${profile.location.toUpperCase()} · AVAILABLE ${gradDate().toUpperCase()}`,
+      `${profile.location.toUpperCase()} · CURRENTLY OPEN TO FULL-TIME AND INTERNSHIP`,
       28,
       ABOUT.meta,
     );
