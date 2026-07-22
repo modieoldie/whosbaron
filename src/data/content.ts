@@ -108,11 +108,17 @@ export const education = [
     detail: "School of Engineering and Applied Sciences",
     degree: "B.S. Computer Science",
     location: "Buffalo, NY",
-    period: "Aug 2023 — May 2027",
+    period: "Jan 2024 — May 2027",
   },
   {
     school: "Queens College, CUNY",
     detail: "One semester before transferring to the University at Buffalo.",
+    /**
+     * The same fact told from Buffalo's side, for the diploma card. That card
+     * is headed "University at Buffalo" and so has to name Queens College
+     * rather than lead with an unattached "one semester".
+     */
+    note: "After one semester at Queens College before transferring to the University at Buffalo.",
     degree: "Computer Science",
     location: "Queens, NY",
     period: "Fall 2023",

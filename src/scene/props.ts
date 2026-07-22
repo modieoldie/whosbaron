@@ -1,7 +1,7 @@
 /**
  * Desk objects. Each one is a hotspot that opens a card, so the résumé is
- * spatial rather than a list: the framed diploma is school, the books are the languages,
- * the NFC card is the home-automation project, the pad is running Conway.
+ * spatial rather than a list: the framed diploma is school, the books are the
+ * languages, the NFC card is the home-automation project, the pad runs Conway.
  */
 
 import * as THREE from "three";
@@ -128,7 +128,9 @@ export function buildProps(
       card: {
         eyebrow: "Education",
         title: education[0]!.school,
-        body: `${education[0]!.degree}, ${education[0]!.detail}. ${education[1]!.detail}`,
+        // The card body renders with `white-space: pre-line`, so the break is a
+        // real newline: the transfer is a separate thought from the degree.
+        body: `${education[0]!.degree}, ${education[0]!.detail}.\n\n${education[1]!.note}`,
         meta: [education[0]!.period, education[0]!.location],
       },
     },
@@ -140,7 +142,7 @@ export function buildProps(
   // desk, off to the figure's right, with the cans hanging in the knee well.
   // It costs no desk surface, which is the entire reason these things exist.
   const HOOK_X = 0.86;
-  /** Front face of the desk top — the vertical edge the clamp grips. */
+  /** Front face of the desk top: the vertical edge the clamp grips. */
   const HOOK_Z = DESK_CENTER_Z + DESK_DEPTH / 2;
   /** Drop from the desk top down to the hook bar. */
   const HOOK_DROP = 0.12;
@@ -182,7 +184,7 @@ export function buildProps(
   bar.position.set(0, -HOOK_DROP, 0.056);
   hanger.add(bar);
 
-  // Upturned lip at the end — the bit that stops the headphones sliding off.
+  // Upturned lip at the end, so the headphones cannot slide off.
   const lip = new THREE.Mesh(new THREE.CylinderGeometry(HOOK_R, HOOK_R, 0.03, RADIAL), metal);
   lip.position.set(0, -HOOK_DROP + 0.015, 0.106);
   hanger.add(lip);
@@ -198,7 +200,7 @@ export function buildProps(
   const BAND_TUBE = 0.011;
   /**
    * More than a half circle, so the band keeps curving past its widest point
-   * and the ends come back in and down — the way a real band cradles a head,
+   * and the ends come back in and down, the way a real band cradles a head,
    * rather than the croquet hoop a flat 180° arc reads as.
    */
   const BAND_ARC = Math.PI * 1.32;
@@ -236,7 +238,7 @@ export function buildProps(
     cup.position.set(side * END_X, END_Y - 0.02, 0);
     headphones.add(cup);
 
-    // Pad on the inboard face — the side that meets an ear. The black shell is
+    // Pad on the inboard face, the side that meets an ear. The black shell is
     // what you see from outside.
     const pad = new THREE.Mesh(
       new THREE.TorusGeometry(0.028, 0.009, RINGS / 2, RADIAL),
@@ -367,7 +369,9 @@ export function buildProps(
       card: {
         eyebrow: "Skills",
         title: "The stack, roughly in order of comfort",
-        body: skills.map((s) => `${s.group}: ${s.items.join(", ")}.`).join("\n"),
+        // A blank line between groups: four dense comma lists stacked directly
+        // on top of each other read as one paragraph of nouns.
+        body: skills.map((s) => `${s.group}: ${s.items.join(", ")}.`).join("\n\n"),
       },
     },
   });
