@@ -85,6 +85,12 @@ export interface LoftRing {
   up: THREE.Vector3;
   rx: number;
   ry: number;
+  /**
+   * Squareness. 2 is a true ellipse; higher pushes the section toward its
+   * corners, giving a flat underside and blunt ends with no hard edges. Above
+   * about 4 it starts to look like a box.
+   */
+  power?: number;
 }
 
 /**
@@ -109,10 +115,19 @@ export function loft(rings: readonly LoftRing[], radial = RADIAL): THREE.BufferG
       continue;
     }
     isPole.push(false);
+    const power = ring.power ?? 2;
     for (let i = 0; i < radial; i++) {
       const angle = (i / radial) * Math.PI * 2;
-      const c = Math.cos(angle) * ring.rx;
-      const s = Math.sin(angle) * ring.ry;
+      const cos = Math.cos(angle);
+      const sin = Math.sin(angle);
+      const c =
+        power === 2
+          ? cos * ring.rx
+          : Math.sign(cos) * Math.pow(Math.abs(cos), 2 / power) * ring.rx;
+      const s =
+        power === 2
+          ? sin * ring.ry
+          : Math.sign(sin) * Math.pow(Math.abs(sin), 2 / power) * ring.ry;
       positions.push(
         ring.center.x + ring.right.x * c + ring.up.x * s,
         ring.center.y + ring.right.y * c + ring.up.y * s,

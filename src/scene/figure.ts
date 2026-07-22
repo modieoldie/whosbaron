@@ -32,7 +32,7 @@ const section = (y: number, rx: number, rz: number, z = 0): LoftRing => ({
   ry: rz,
 });
 
-/** A circular profile — limbs, fingers, cords. */
+/** A circular profile — limbs, fingers, zip teeth. */
 const round = (table: Table) => (t: number) => {
   const r = knots(table, t);
   return [r, r] as const;
@@ -43,6 +43,26 @@ const oval = (wide: Table, thick: Table) => (t: number) =>
   [knots(wide, t), knots(thick, t)] as const;
 
 const point = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
+
+/** With +X, the ring frame for a form stacked toward -Z — a foot. */
+const RING_DOWN = new THREE.Vector3(0, -1, 0);
+
+/** A standing cross-section for a form stacked toward -Z: `rx` across, `ry` tall. */
+const slice = (
+  x: number,
+  y: number,
+  z: number,
+  rx: number,
+  ry: number,
+  power?: number,
+): LoftRing => ({
+  center: new THREE.Vector3(x, y, z),
+  right: X_AXIS,
+  up: RING_DOWN,
+  rx,
+  ry,
+  power,
+});
 
 /* -------------------------------- the head -------------------------------- */
 
@@ -75,10 +95,9 @@ const HEAD_BACK: Table = [[-1, -0.012], [-0.35, 0], [0.15, 0.007], [0.6, 0.004],
  * Maps a direction on the unit sphere onto the head's surface, `swell` metres
  * proud of it.
  *
- * One map for the skull and the hair both. Because every term is either scaled
- * up by `swell` or identical between the two, the hair is guaranteed to lie
- * outside the scalp at every single vertex — no amount of tuning the profile
- * can make the skull poke through it.
+ * One map for the skull and for the cap sitting on it. Every term is either
+ * scaled by `swell` or identical between the two, so the cap lies outside the
+ * scalp at every vertex however the head's profile is retuned.
  */
 function headSurface(v: THREE.Vector3, swell: number): THREE.Vector3 {
   const u = THREE.MathUtils.clamp(v.y, -1, 1);
@@ -91,17 +110,41 @@ function headSurface(v: THREE.Vector3, swell: number): THREE.Vector3 {
   );
 }
 
+/* --------------------------------- the cap --------------------------------- */
+
+// He has no hair, so the cap is the head's whole silhouette above the ears.
+// Built from the skull's own surface map, so it cannot float or clip.
+
+/** How far down the skull the crown reaches, as a share of the sweep from top. */
+const CAP_ARC = 0.44;
+/** Crown clearance: fabric over a scalp, not paint on one. */
+const CAP_SWELL = 0.01;
+/** Backward rake, clearing the brow at the front and the nape at the back. */
+const CAP_TILT = 0.2;
+/** Panels around the crown. Six, as a baseball cap is. */
+const CAP_PANELS = 6;
+
+/** Where the crown's top ends up once raked back — the button, and the mast. */
+const CAP_CROWN = new THREE.Vector3(0, 1, 0).applyAxisAngle(new THREE.Vector3(1, 0, 0), CAP_TILT);
+
 /** Pushes a unit sphere's vertices through `headSurface`, in place. */
-function shapeHead(geometry: THREE.BufferGeometry, swell: number, tilt = 0) {
+function shapeHead(geometry: THREE.BufferGeometry, swell: number, tilt = 0, ripple = 0) {
   const position = geometry.attributes.position as THREE.BufferAttribute;
   const v = new THREE.Vector3();
   for (let i = 0; i < position.count; i++) {
     v.fromBufferAttribute(position, i);
     // Tilting the direction rather than the finished mesh is what lets the
-    // hairline sit at an angle while the shell stays a true offset of the
+    // cap's rim sit at an angle while the crown stays a true offset of the
     // scalp: it moves which part of the head is covered, not the shape of it.
     if (tilt) v.applyAxisAngle(X_AXIS, tilt);
     const p = headSurface(v, swell);
+    if (ripple) {
+      // Sub-millimetre unevenness: too small to see as bumps, but it breaks up
+      // the clean highlight band that makes fabric read as plastic.
+      const n =
+        Math.sin(v.x * 187) * Math.sin(v.y * 151 + 1.3) * Math.sin(v.z * 173 + 2.1);
+      p.addScaledVector(p.clone().normalize(), n * ripple);
+    }
     position.setXYZ(i, p.x, p.y, p.z);
   }
   geometry.computeVertexNormals();
@@ -122,6 +165,29 @@ const FINGERS = [
   { x: 0.011, length: 0.071 },
   { x: 0.031, length: 0.059 },
 ] as const;
+
+/* --------------------------------- the foot -------------------------------- */
+
+/** How high the sole rides off the floor. */
+const SOLE = 0.003;
+
+/**
+ * Sections along the foot, heel to toe: `[z, half-width, half-height]`. The
+ * ankle lands at -0.435, with a short heel behind it and most of the length in
+ * front.
+ */
+const SHOE: readonly (readonly [number, number, number])[] = [
+  [-0.378, 0.028, 0.03],
+  [-0.386, 0.036, 0.037],
+  [-0.398, 0.04, 0.041],
+  [-0.42, 0.042, 0.042],
+  [-0.45, 0.043, 0.041],
+  [-0.485, 0.043, 0.037],
+  [-0.52, 0.042, 0.032],
+  [-0.555, 0.038, 0.026],
+  [-0.585, 0.031, 0.02],
+  [-0.608, 0.017, 0.012],
+];
 
 interface Hand {
   group: THREE.Group;
@@ -215,16 +281,17 @@ export function buildFigure(): FigureRig {
     return mesh;
   };
 
-  const hoodie = new THREE.MeshStandardMaterial({ color: HEX.hoodie, roughness: 0.95 });
-  const hoodieDark = new THREE.MeshStandardMaterial({ color: HEX.hoodieDark, roughness: 0.95 });
+  const fleece = new THREE.MeshStandardMaterial({ color: HEX.zip, roughness: 0.95 });
+  const fleeceDark = new THREE.MeshStandardMaterial({ color: HEX.zipDark, roughness: 0.95 });
+  const tee = new THREE.MeshStandardMaterial({ color: HEX.tee, roughness: 0.9 });
   const denim = new THREE.MeshStandardMaterial({ color: HEX.denim, roughness: 0.92 });
   const skin = new THREE.MeshStandardMaterial({ color: HEX.skin, roughness: 0.72 });
   const lip = new THREE.MeshStandardMaterial({ color: HEX.skinShade, roughness: 0.7 });
   const sneaker = new THREE.MeshStandardMaterial({ color: HEX.sneaker, roughness: 0.6 });
-  const cord = new THREE.MeshStandardMaterial({
+  const metal = new THREE.MeshStandardMaterial({
     color: HEX.brass,
-    roughness: 0.6,
-    metalness: 0.2,
+    roughness: 0.35,
+    metalness: 0.75,
   });
   const dark = new THREE.MeshStandardMaterial({ color: 0x0a0a0c, roughness: 0.4 });
   const hair = new THREE.MeshStandardMaterial({
@@ -275,11 +342,11 @@ export function buildFigure(): FigureRig {
         section(0.347, 0.155, 0.107, 0), // shoulder line
         section(0.385, 0.138, 0.098, 0.004), // the slope up to the neck
         section(0.412, 0.100, 0.082, 0.006),
-        section(0.434, 0.072, 0.069, 0.004), // collar
+        section(0.434, 0.072, 0.069, 0.004), // neckline
         section(0.424, 0.050, 0.050, 0.004),
         section(0.408, 0, 0, 0.004),
       ]),
-      hoodie,
+      fleece,
     ),
   );
   torso.add(sweatshirt);
@@ -299,35 +366,113 @@ export function buildFigure(): FigureRig {
   );
   torso.add(neck);
 
-  // The hood, bunched across the back of the neck.
-  const hood = track(
+  /* ------------------------------ quarter zip ------------------------------ */
+
+  // A horseshoe rather than a ring: the gap where the ends stop *is* the
+  // opening, and each round cap is the rolled edge of the fabric. Tallest at
+  // the nape, falling away toward the throat — a collar no longer held shut.
+  const collar = track(
     new THREE.Mesh(
       limb(
-        [point(-0.092, 0.358, 0.070), point(0, 0.404, 0.098), point(0.092, 0.358, 0.070)],
-        round([[0, 0.026], [0.5, 0.058], [1, 0.026]]),
-        { radial: 28, segments: 20 },
+        [
+          point(-0.045, 0.442, -0.068),
+          point(-0.082, 0.448, 0.005),
+          point(-0.060, 0.452, 0.072),
+          point(0, 0.452, 0.086),
+          point(0.060, 0.452, 0.072),
+          point(0.082, 0.448, 0.005),
+          point(0.045, 0.442, -0.068),
+        ],
+        oval([[0, 0.012], [0.5, 0.014], [1, 0.012]], [[0, 0.030], [0.5, 0.044], [1, 0.030]]),
+        { up: Y_AXIS, radial: 24, segments: 40 },
       ),
-      hoodieDark,
+      fleece,
     ),
   );
-  torso.add(hood);
+  torso.add(collar);
 
+  // Quarter zip: the track runs to mid-chest and is pulled halfway down it.
+  // Below the slider is one closed strip; above, the two placket edges swing
+  // apart and the shirt underneath shows.
+  const SLIDER_Y = 0.345;
+
+  const shirt = track(
+    new THREE.Mesh(
+      limb(
+        [point(0, 0.352, -0.107), point(0, 0.392, -0.0935), point(0, 0.426, -0.07)],
+        oval([[0, 0.013], [0.55, 0.030], [1, 0.043]], [[0, 0.005], [1, 0.005]]),
+        { up: Y_AXIS, radial: 20, segments: 16 },
+      ),
+      tee,
+    ),
+  );
+  torso.add(shirt);
+
+  // The two open edges, framing the shirt and landing on the collar's ends.
   for (const side of [-1, 1]) {
     torso.add(
-      new THREE.Mesh(
-        limb(
-          [
-            point(side * 0.028, 0.418, -0.070),
-            point(side * 0.032, 0.370, -0.100),
-            point(side * 0.030, 0.320, -0.112),
-          ],
-          round([[0, 0.0045], [1, 0.004]]),
-          { radial: 10, segments: 10 },
+      track(
+        new THREE.Mesh(
+          limb(
+            [
+              point(side * 0.006, SLIDER_Y, -0.109),
+              point(side * 0.026, 0.385, -0.1),
+              point(side * 0.045, 0.424, -0.075),
+            ],
+            oval([[0, 0.008], [1, 0.007]], [[0, 0.007], [1, 0.006]]),
+            { up: Y_AXIS, radial: 16, segments: 14 },
+          ),
+          fleeceDark,
         ),
-        cord,
       ),
     );
   }
+
+  // The closed run below the slider, teeth as a brass thread laid into it — the
+  // one warm highlight on him, and what reads as a zip rather than a seam.
+  torso.add(
+    track(
+      new THREE.Mesh(
+        limb(
+          [point(0, 0.282, -0.1175), point(0, 0.315, -0.1135), point(0, SLIDER_Y, -0.109)],
+          oval([[0, 0.009], [1, 0.010]], [[0, 0.006], [1, 0.006]]),
+          { up: Y_AXIS, radial: 16, segments: 12 },
+        ),
+        fleeceDark,
+      ),
+    ),
+  );
+  torso.add(
+    new THREE.Mesh(
+      limb(
+        [point(0, 0.284, -0.1225), point(0, 0.315, -0.1185), point(0, 0.343, -0.114)],
+        round([[0, 0.0028], [1, 0.003]]),
+        { radial: 10, segments: 10 },
+      ),
+      metal,
+    ),
+  );
+
+  // The slider, and the pull hanging off it under its own weight.
+  const slider = new THREE.Mesh(
+    limb(
+      [point(0, 0.338, -0.1145), point(0, 0.351, -0.113)],
+      oval([[0, 0.008], [1, 0.006]], [[0, 0.005], [1, 0.004]]),
+      { up: Y_AXIS, radial: 14, segments: 6 },
+    ),
+    metal,
+  );
+  torso.add(slider);
+  torso.add(
+    new THREE.Mesh(
+      limb(
+        [point(0, 0.334, -0.119), point(0, 0.318, -0.1215), point(0, 0.306, -0.1195)],
+        oval([[0, 0.004], [1, 0.005]], [[0, 0.0018], [1, 0.002]]),
+        { up: Y_AXIS, radial: 12, segments: 10 },
+      ),
+      metal,
+    ),
+  );
 
   /* --------------------------------- head --------------------------------- */
 
@@ -339,6 +484,125 @@ export function buildFigure(): FigureRig {
     new THREE.Mesh(shapeHead(new THREE.SphereGeometry(1, RADIAL, RINGS), 0), skin),
   );
   head.add(skull);
+
+  /* ---------------------- patchwork propeller cap ---------------------- */
+
+  // Six panels cut as sectors of the skull's own map, so the crown is the
+  // head's shape a centimetre out. Sectors are also what make it patchwork:
+  // each panel computes normals alone, so shared edges shade as seams for free.
+  const patchwork = [HEX.bookRed, HEX.bookCream, HEX.bookBlue, HEX.brassDim, HEX.steel, HEX.frameLip]
+    .map(
+      (color) =>
+        new THREE.MeshStandardMaterial({ color, roughness: 0.9, side: THREE.DoubleSide }),
+    );
+
+  for (let i = 0; i < CAP_PANELS; i++) {
+    const panel = track(
+      new THREE.Mesh(
+        shapeHead(
+          new THREE.SphereGeometry(
+            1,
+            12,
+            RINGS,
+            (i / CAP_PANELS) * Math.PI * 2,
+            (Math.PI * 2) / CAP_PANELS,
+            0,
+            Math.PI * CAP_ARC,
+          ),
+          CAP_SWELL,
+          CAP_TILT,
+          0.0007, // ripple: the give of cotton over a skull
+        ),
+        patchwork[i]!,
+      ),
+    );
+    head.add(panel);
+  }
+
+  // Swept side to side, so its curl round the head is the spine itself rather
+  // than a bend applied after. Grouped so it tips over the brow in one number.
+  const bill = new THREE.Group();
+  bill.position.set(0, 0.036, -0.078);
+  bill.rotation.x = -0.24;
+  head.add(bill);
+
+  bill.add(
+    track(
+      new THREE.Mesh(
+        limb(
+          [
+            point(-0.072, -0.004, 0.028),
+            point(-0.042, 0.001, -0.012),
+            point(0, 0.002, -0.026),
+            point(0.042, 0.001, -0.012),
+            point(0.072, -0.004, 0.028),
+          ],
+          oval([[0, 0.014], [0.5, 0.042], [1, 0.014]], [[0, 0.005], [0.5, 0.007], [1, 0.005]]),
+          { up: Y_AXIS, radial: 24, segments: 32 },
+        ),
+        patchwork[0]!,
+      ),
+    ),
+  );
+
+  /* ------------------------------- propeller ------------------------------- */
+
+  // Mounted on the button: its axis is the crown direction, which the rake has
+  // already moved, so it stands off the cap rather than off the head.
+  const mast = new THREE.Group();
+  mast.position.copy(headSurface(CAP_CROWN, CAP_SWELL));
+  mast.quaternion.setFromUnitVectors(Y_AXIS, CAP_CROWN.clone().normalize());
+  head.add(mast);
+
+  mast.add(
+    new THREE.Mesh(
+      limb([point(0, -0.004, 0), point(0, 0.014, 0)], round([[0, 0.006], [0.6, 0.0035], [1, 0.005]]), {
+        radial: 16,
+        segments: 8,
+      }),
+      metal,
+    ),
+  );
+
+  const propeller = new THREE.Group();
+  propeller.position.y = 0.016;
+  mast.add(propeller);
+
+  propeller.add(
+    new THREE.Mesh(
+      limb([point(0, -0.003, 0), point(0, 0.004, 0)], round([[0, 0.005], [1, 0.006]]), {
+        radial: 16,
+        segments: 6,
+      }),
+      metal,
+    ),
+  );
+
+  // Four blades, long and narrow at a pitch — dragonfly, not aircraft.
+  for (let i = 0; i < 4; i++) {
+    const arm = new THREE.Group();
+    arm.rotation.y = (i / 4) * Math.PI * 2;
+    propeller.add(arm);
+
+    const pitch = new THREE.Group();
+    pitch.rotation.x = 0.26; // blade pitch
+    arm.add(pitch);
+
+    pitch.add(
+      new THREE.Mesh(
+        limb(
+          [point(0.005, 0, 0), point(0.03, 0.002, 0.004), point(0.062, 0.001, 0)],
+          oval(
+            [[0, 0.004], [0.3, 0.011], [0.75, 0.010], [1, 0.003]],
+            [[0, 0.0018], [1, 0.0009]],
+          ),
+          { up: Y_AXIS, radial: 12, segments: 14 },
+        ),
+        patchwork[(i * 2 + 1) % CAP_PANELS]!,
+      ),
+    );
+  }
+
   const nose = track(
     new THREE.Mesh(
       limb(
@@ -457,7 +721,7 @@ export function buildFigure(): FigureRig {
             UPPER_ARM,
             { radial: 32, segments: 16 },
           ),
-          hoodie,
+          fleece,
         ),
       ),
     );
@@ -478,7 +742,7 @@ export function buildFigure(): FigureRig {
             FOREARM,
             { radial: 32, segments: 16 },
           ),
-          hoodie,
+          fleece,
         ),
       ),
     );
@@ -517,22 +781,23 @@ export function buildFigure(): FigureRig {
       ),
     );
 
-    // One piece, a shoe 
+    // One piece, no sole slab — a flat plate reads as a plane edge-on from
+    // every angle in this room. Sections are stacked rather than swept, because
+    // a sweep ends in a round cap and a heel is not a dome: this closes the
+    // back over 7mm instead of the 50mm a cap that size would take.
+    const foot = side * 0.146;
     group.add(
       track(
         new THREE.Mesh(
-          limb(
-            [
-              point(side * 0.145, 0.058, -0.375),
-              point(side * 0.145, 0.046, -0.47),
-              point(side * 0.148, 0.036, -0.575),
-            ],
-            oval(
-              [[0, 0.046], [0.45, 0.052], [1, 0.04]],
-              [[0, 0.054], [0.45, 0.042], [1, 0.029]],
+          loft([
+            slice(foot, 0.033, -0.371, 0, 0),
+            ...SHOE.map(([z, rx, ry]) =>
+              // Every underside on the same plane, so the sole is flat and the
+              // shoe stands on it rather than balancing on a curve.
+              slice(foot, ry! + SOLE, z!, rx!, ry!, 3),
             ),
-            { up: Y_AXIS, radial: 32, segments: 18 },
-          ),
+            slice(foot, 0.015, -0.617, 0, 0),
+          ]),
           sneaker,
         ),
       ),
@@ -552,7 +817,7 @@ export function buildFigure(): FigureRig {
   // Every material here was created in this function, so fading them is safe —
   // nothing else in the room shares one. Collected from the graph rather than
   // from `meshes` so the odds and ends that aren't tracked as hover targets —
-  // the eyes, the hood cords — fade with the rest of him.
+  // the eyes, the zip, the cap and its propeller — fade with the rest of him.
   const materials = new Set<THREE.Material>();
   group.traverse((child) => {
     const material = (child as THREE.Mesh).material;
@@ -583,6 +848,10 @@ export function buildFigure(): FigureRig {
       // Idle head drift. Two detuned sines never resolve into a visible loop.
       head.rotation.y = Math.sin(elapsed * 0.23) * 0.07 + Math.sin(elapsed * 0.61) * 0.02;
       head.rotation.x = Math.sin(elapsed * 0.31) * 0.035;
+
+      // Turning on nothing but the room's air: the rate wanders, because a
+      // constant one reads as a motor.
+      propeller.rotation.y = elapsed * 0.9 + Math.sin(elapsed * 0.37) * 0.55;
 
       // Left hand types in bursts
       const burst = Math.max(0, Math.sin(elapsed * 0.42) - 0.15) / 0.85;
