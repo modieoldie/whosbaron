@@ -21,17 +21,24 @@ import { profile } from "../data/content";
     <h1 class="font-serif text-5xl leading-[0.95] font-light tracking-tight text-bone sm:text-6xl">
       who's <span class="italic text-brass">baron</span>?
     </h1>
-    <p class="mt-6 font-mono text-[0.8125rem] leading-relaxed text-ash">
-      {profile.tagline}
-    </p>
   </div>
 
-  <div id="hint" data-visible="false">
+  <!-- `data-view` lets the stylesheet treat each view's line on its own terms:
+       they are different lengths, and only the short one can hold a phone to a
+       single line. Kept in the markup so it is right before the scene boots. -->
+  <div id="hint" data-visible="false" data-view="orbit">
     <!-- Rewritten per view by the scene; this is the orbit copy. -->
-    <p id="hint-text" class="marker">Drag to look around · Click the desk to pull up a chair</p>
+    <p id="hint-text" class="marker">Drag to look around · Click the desk</p>
   </div>
 
   <button id="back-btn" class="ghost" data-visible="false" type="button">← Back to the room</button>
+
+  <!-- Narrow viewports read one monitor at a time, so they need a way to reach
+       the other one. Never shown on a desktop, which frames both at once. -->
+  <div id="screen-switch" data-visible="false">
+    <button type="button" data-active="true">Projects</button>
+    <button type="button" data-active="false">About</button>
+  </div>
 
   <aside id="card" data-visible="false" aria-live="polite">
     <button
@@ -86,8 +93,8 @@ import { profile } from "../data/content";
   import { boot } from "../scene/main";
 
   boot().catch((error) => {
-    // WebGL can fail for reasons entirely outside our control — a blocklisted
-    // driver, a locked-down browser. Don't strand the visitor on a black page.
+    // WebGL can fail for reasons outside our control: a blocklisted driver, a
+    // locked-down browser. Don't strand the visitor on a black page.
     console.error("[scene] failed to start", error);
     window.location.replace("/text");
   });

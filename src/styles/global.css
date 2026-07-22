@@ -35,6 +35,13 @@
     -webkit-font-smoothing: antialiased;
   }
 
+  /* Touch only: stops the grey flash mobile browsers paint over a tapped
+     control, which reads as a rendering fault against this palette. */
+  button,
+  a {
+    -webkit-tap-highlight-color: transparent;
+  }
+
   ::selection {
     background-color: var(--color-brass);
     color: var(--color-ink);
@@ -195,7 +202,7 @@
   height: 5px;
   border-radius: 50%;
   background: var(--color-brass);
-  /* Bright enough to be legible from across the room — the dot is the only
+  /* Bright enough to be legible from across the room: the dot is the only
      thing saying the props are worth touching, so it has to survive being seen
      against a dark desk from three metres back. */
   opacity: 0.7;
@@ -266,6 +273,17 @@
   white-space: pre-line; /* the skills card ships real newlines */
 }
 
+/* The card's two optional rows leave nothing behind when they are unused.
+   Everything else on the page hides by `visibility`, which keeps the box and is
+   what lets those pieces fade, but inside a card that box is still furniture:
+   a prop with no chips and no link was ending on its own top margins plus a
+   full ghost-button's worth of border and padding. These two fade with the card
+   around them, so they have no transition of their own to protect. */
+#card-meta[data-visible="false"],
+#card-link[data-visible="false"] {
+  display: none;
+}
+
 #corner-links {
   position: fixed;
   bottom: clamp(1.5rem, 4vh, 2.5rem);
@@ -275,17 +293,133 @@
   gap: 1.5rem;
 }
 
+/* The panel switcher for the one-monitor-at-a-time reading view. Positioned
+   here rather than in the mobile block because the view that shows it is the
+   only thing that decides whether it appears at all. */
+#screen-switch {
+  position: fixed;
+  bottom: calc(env(safe-area-inset-bottom) + 3.5rem);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 35;
+  display: flex;
+  border: 1px solid var(--color-hairline);
+  background: rgba(10, 10, 11, 0.82);
+  backdrop-filter: blur(10px);
+}
+
+#screen-switch button {
+  /* 44px tall regardless of the label: this is a thumb target. */
+  padding: 0.85rem 1.4rem;
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--color-ash-dim);
+  transition: color 240ms ease;
+}
+
+#screen-switch button[data-active="true"] {
+  color: var(--color-brass);
+}
+
+#screen-switch button + button {
+  border-left: 1px solid var(--color-hairline);
+}
+
+/* ------------------------------------------------------------------ *
+ * Phones                                                              *
+ *                                                                     *
+ * Everything below is additive and scoped: the desktop layout above is *
+ * what a pointer device still gets.                                    *
+ * ------------------------------------------------------------------ */
+
 @media (max-width: 720px) {
+  /* Mobile browser chrome eats the bottom of `vh`. `dvh` is the viewport that
+     is actually on screen, so the fixed furniture stops hiding under the URL
+     bar as it collapses and expands. */
+  html,
+  body {
+    height: 100dvh;
+  }
+
   #intro {
+    /* Clear of the links now sitting in the opposite corner. */
+    max-width: calc(100vw - 9rem);
+    top: calc(env(safe-area-inset-top) + 1.5rem);
+    left: calc(env(safe-area-inset-left) + 1.25rem);
+  }
+
+  #intro h1 {
+    font-size: 2.75rem;
+  }
+
+  /* Kept, not hidden: these are the only links off this page, and a visitor on
+     a phone has as much use for them as one on a laptop. Moved to the top-right
+     because the foot of the screen belongs to the hint and the switcher. */
+  #corner-links {
+    top: calc(env(safe-area-inset-top) + 1.5rem);
+    right: calc(env(safe-area-inset-right) + 1.25rem);
+    bottom: auto;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 1rem;
+    text-align: right;
+  }
+
+  #back-btn {
+    top: calc(env(safe-area-inset-top) + 1.25rem);
+    left: calc(env(safe-area-inset-left) + 1.25rem);
+  }
+
+  /* A sheet along the bottom edge, capped so a long card can't cover the room
+     it is describing, and scrollable inside itself when it hits that cap. */
+  #card {
+    right: 0.75rem;
+    left: 0.75rem;
+    bottom: calc(env(safe-area-inset-bottom) + 0.75rem);
+    width: auto;
+    max-height: 62dvh;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 1.5rem 1.25rem;
+  }
+
+  /* The ✕ is a 12px glyph; give it a real target around it. */
+  #card-close {
+    top: 0.25rem;
+    right: 0.25rem;
+    padding: 0.85rem;
+  }
+
+  #hint {
+    bottom: calc(env(safe-area-inset-bottom) + 1.25rem);
+    /* The desk and reading-view lines are longer than a phone is wide, and
+       centred text that wraps under itself reads better than text clipped at
+       both ends. */
     max-width: calc(100vw - 3rem);
   }
-  #corner-links {
-    display: none;
+
+  /* The orbit line is short enough to hold to one line, and it reads as one
+     instruction: the dot separates two halves of a sentence, not two
+     paragraphs, so breaking it there loses the join.
+     `.marker`'s 0.28em tracking is what overflows a phone, not the wording, so
+     the tracking comes in and the size is tied to the viewport: 35 characters
+     of a 0.6-em monospace at 2.5vw can't outgrow the screen carrying them. */
+  #hint[data-view="orbit"] {
+    max-width: none;
   }
-  #card {
-    right: 1rem;
-    left: 1rem;
-    width: auto;
+
+  #hint[data-view="orbit"] #hint-text {
+    white-space: nowrap;
+    font-size: min(0.625rem, 2.5vw);
+    letter-spacing: 0.14em;
+  }
+
+  /* In the reading view the switcher owns the bottom of the screen, so the
+     hint steps up over it rather than sitting underneath. */
+  body:has(#screen-switch[data-visible="true"]) #hint {
+    bottom: calc(env(safe-area-inset-bottom) + 7rem);
   }
 }
 

@@ -2,9 +2,9 @@
  * Bootstrap: renderer, camera rig, the two views (orbit / desk), and the wiring
  * between 3D hotspots and the DOM overlay.
  *
- * Two camera states, one tween between them. Orbit is the default — you are
- * over the room and can swing around it. Clicking the desk flies you in until
- * the monitors fill the frame, and they become clickable.
+ * Two camera states, one tween between them. Orbit is the default: you are over
+ * the room and can swing around it. Clicking the desk flies you in until the
+ * monitors fill the frame, and they become clickable.
  */
 
 import * as THREE from "three";
@@ -24,6 +24,7 @@ import { buildDust } from "./dust";
 import { ProjectsScreen, AboutScreen, ConwayScreen, PhoneScreen } from "./screens";
 import { ScreenGlow } from "./glow";
 import { Interaction } from "./interaction";
+import { ScreenFocus } from "./screenfocus";
 import { PropMarkers } from "./markers";
 import type { CardContent, HotspotAction, Hotspot } from "./types";
 import { projects } from "../data/content";
@@ -31,14 +32,14 @@ import { projects } from "../data/content";
 /* ------------------------------ views ------------------------------ */
 
 // The landing view. `ORBIT_PULLBACK` scales the camera's offset from the target,
-// so 1.5 sits it half again as far out as the framing the angle was chosen at —
+// so 1.5 sits it half again as far out as the framing the angle was chosen at:
 // same direction, more room around him.
 const ORBIT_PULLBACK = 1.5;
 // Screen-space nudge, in metres along the camera's own right axis. The ensemble
 // is centred on the origin, but its mass is not: the shelf, the tray and the
 // books all sit out to the left, so aiming at the origin lands the room off to
-// the right of frame. Panning the whole rig — camera and pivot together, so
-// orbiting still turns about the same point — recentres it.
+// the right of frame. Panning the whole rig recentres it: camera and pivot
+// together, so orbiting still turns about the same point.
 const ORBIT_SHIFT = 0.35;
 
 const ORBIT_TARGET = new THREE.Vector3(0, 0.95, ROOM_CENTER_Z);
@@ -59,33 +60,54 @@ const ORBIT_VIEW = {
 };
 
 // Aimed at the bottom edge of the panels rather than their middle: the desk view
-// has to hold the whole desktop, and everything worth clicking — the tray, the
-// pad, the phone, the NFC card — sits below the screens, not level with them.
+// has to hold the whole desktop, and everything worth clicking (tray, pad,
+// phone, NFC card) sits below the screens, not level with them.
 const DESK_TARGET = new THREE.Vector3(0, SCREEN_Y - 0.3, SCREEN_Z);
 // Up and in front, looking down across the desk from about where your own head
 // would be. The pitch is what puts the desk surface in frame at all: shallower
 // and the near props fall off the bottom of the screen.
 const DESK_DIR = new THREE.Vector3(0, 0.26, 1).normalize();
 // Width the framing has to cover. Wider than the two panels themselves (2.08)
-// because the props out at the edges of the desk — the books, the sketchpad —
+// because the props out at the edges of the desk, the books and the sketchpad,
 // sit closer to the camera than the screens do and so read wider than they are.
 const DESK_SPAN = MONITOR_X * 2 + SCREEN_W + 0.42;
 // Floor on the flight-in distance. At wide aspect ratios the horizontal fit is
 // satisfied long before the vertical one, and the desk top is the thing that
-// runs out of frame first — this is how far back the near edge of the desk needs
+// runs out of frame first. This is how far back the near edge of the desk needs
 // the camera to be.
 const DESK_MIN_DIST = 1.98;
 
-type ViewName = "orbit" | "desk";
+// A phone held upright, where the desk view's framing gives out (see
+// `screenfocus.ts`). Landscape phones clear this comfortably and get the desk
+// view exactly as a desktop does.
+const NARROW_ASPECT = 1.25;
+const COARSE_POINTER = window.matchMedia("(pointer: coarse)").matches;
+
+/** Whether this viewport has to read the monitors one at a time. */
+function narrowViewport() {
+  return COARSE_POINTER && window.innerWidth / window.innerHeight < NARROW_ASPECT;
+}
+
+type ViewName = "orbit" | "desk" | "screen";
 
 /**
  * The standing line at the foot of the screen. It changes with the view because
- * the two views need different things said: out in the room, how to move; at the
- * desk, which panel is which — the right monitor is the about page, and nothing
- * about a wall of text says so on its own.
+ * the views need different things said: out in the room, how to move; at the
+ * desk, which panel is which, since nothing about a wall of text says that the
+ * right monitor is the about page.
+ *
+ * And it changes with the input, because "drag" and "click" are not what a
+ * visitor on a phone does, nor is either one of them what they need told: on a
+ * single panel filling the frame, the thing worth saying is that it zooms.
  */
 const HINTS: Record<ViewName, string> = {
-  orbit: "Drag to look around · Click the desk to pull up a chair",
+  orbit: "Drag to look around · Click the desk",
+  desk: "Left screen — projects · Right screen — about me & contact",
+  screen: "Pinch to zoom · Drag to move around the screen",
+};
+
+const TOUCH_HINTS: Partial<Record<ViewName, string>> = {
+  orbit: "Swipe to look around · Tap the desk",
   desk: "Left screen — projects · Right screen — about me & contact",
 };
 
@@ -111,7 +133,7 @@ function detectQuality() {
     bloom: !lowPower,
     // MSAA for the composer's offscreen buffer. `antialias: true` on the
     // renderer only covers the default framebuffer, which the composer
-    // bypasses entirely — without this, every silhouette in the scene crawls
+    // bypasses entirely. Without this, every silhouette in the scene crawls
     // with stair-steps as you orbit.
     samples: lowPower ? 2 : 4,
     pixelRatio: Math.min(window.devicePixelRatio, lowPower ? 1.5 : 2),
@@ -134,6 +156,8 @@ export async function boot() {
     hint: document.getElementById("hint")!,
     hintText: document.getElementById("hint-text")!,
     back: document.getElementById("back-btn")!,
+    screenSwitch: document.getElementById("screen-switch")!,
+    screenTabs: [...document.querySelectorAll<HTMLButtonElement>("#screen-switch button")],
     card: document.getElementById("card")!,
     cardEyebrow: document.getElementById("card-eyebrow")!,
     cardTitle: document.getElementById("card-title")!,
@@ -146,7 +170,7 @@ export async function boot() {
   const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   const quality = detectQuality();
 
-  // Canvas text is the entire content of the monitors — painting before the
+  // Canvas text is the entire content of the monitors, so painting before the
   // webfont resolves bakes a fallback into the texture permanently. Worth
   // waiting for, but never indefinitely: the fonts come from a third party, and
   // an ad blocker or a captive proxy can leave that request pending forever.
@@ -224,9 +248,9 @@ export async function boot() {
 
   // The desk surface and both monitors all mean "take me in".
   const focusHotspots: Hotspot[] = [
-    { object: desk.deskTop, id: "desk", label: "Pull up to the desk", action: { type: "focus-desk" } },
-    { object: desk.projectsScreen, id: "screen-left", label: "Projects — click to read", action: { type: "focus-desk" } },
-    { object: desk.aboutScreen, id: "screen-right", label: "About me & contact", action: { type: "focus-desk" } },
+    { object: desk.deskTop, id: "desk", label: "Pull up to the desk", action: { type: "focus-desk", screen: 0 } },
+    { object: desk.projectsScreen, id: "screen-left", label: "Projects — click to read", action: { type: "focus-desk", screen: 0 } },
+    { object: desk.aboutScreen, id: "screen-right", label: "About me & contact", action: { type: "focus-desk", screen: 1 } },
   ];
 
   const hotspots = [...props.hotspots, ...focusHotspots];
@@ -245,7 +269,7 @@ export async function boot() {
     composer.addPass(new RenderPass(scene, camera));
     const bloom = new UnrealBloomPass(
       new THREE.Vector2(window.innerWidth, window.innerHeight),
-      0.42, // strength — enough for the screens to bleed, not enough to fog the room
+      0.42, // strength: enough for the screens to bleed, not enough to fog the room
       0.6,
       0.85,
     );
@@ -258,8 +282,8 @@ export async function boot() {
   const DESK_VIEW = { position: new THREE.Vector3(), target: DESK_TARGET };
 
   /**
-   * How far back the camera has to sit for the whole desk — both monitors and
-   * everything standing on the surface — to fit in frame. Derived from the
+   * How far back the camera has to sit for the whole desk, both monitors and
+   * everything standing on the surface, to fit in frame. Derived from the
    * aspect ratio rather than hard-coded: the monitors are wide enough that a
    * portrait window would crop them otherwise.
    */
@@ -277,10 +301,18 @@ export async function boot() {
   let tween: { fromPos: THREE.Vector3; fromTarget: THREE.Vector3; to: typeof ORBIT_VIEW; t: number; duration: number } | null = null;
   const parallax = new THREE.Vector2();
 
-  function goTo(next: ViewName) {
-    if (view === next && !tween) return;
+  /**
+   * @param screen Which panel the reading view should open on. Ignored by the
+   *               orbit and desk views, which don't single one out.
+   */
+  function goTo(next: ViewName, screen = 0) {
+    // Re-tapping the other monitor while already in the reading view is a page
+    // turn, not a no-op, so the early-out has to let a screen change through.
+    if (view === next && !tween && !(next === "screen" && screen !== screenFocus.screen)) return;
     view = next;
-    const destination = next === "desk" ? DESK_VIEW : ORBIT_VIEW;
+    if (next === "screen") screenFocus.focus(screen);
+    const destination =
+      next === "desk" ? DESK_VIEW : next === "screen" ? screenFocus.view : ORBIT_VIEW;
 
     tween = {
       fromPos: camera.position.clone(),
@@ -299,16 +331,23 @@ export async function boot() {
     screens.about.setHoveredLink(-1);
 
     dom.intro.dataset.visible = String(next === "orbit");
-    dom.hintText.textContent = HINTS[next];
+    dom.hintText.textContent = (COARSE_POINTER && TOUCH_HINTS[next]) || HINTS[next];
+    dom.hint.dataset.view = next;
     dom.hint.dataset.visible = "true";
-    dom.back.dataset.visible = String(next === "desk");
-    if (next === "desk") closeCard();
+    dom.back.dataset.visible = String(next !== "orbit");
+    // The panel switcher only exists in the reading view: it is the one view
+    // that shows a single monitor and so needs a way to reach the other.
+    dom.screenSwitch.dataset.visible = String(next === "screen");
+    dom.screenTabs.forEach((tab, i) => {
+      tab.dataset.active = String(next === "screen" && i === screen);
+    });
+    if (next !== "orbit") closeCard();
   }
 
   /**
-   * How solid the figure is this frame. He owns the orbit view and obstructs
-   * the desk one — you fly to the monitors and he is sitting in front of them —
-   * so the flight in dissolves him.
+   * How solid the figure is this frame. He owns the orbit view but obstructs
+   * the desk one, sitting in front of the monitors, so the flight in dissolves
+   * him.
    *
    * Front-loaded on the way in and back-loaded on the way out, both against the
    * eased camera progress rather than raw time: he has to be gone before the
@@ -316,9 +355,9 @@ export async function boot() {
    * chair is far enough away to see the whole of him arrive.
    */
   function figureOpacity(): number {
-    if (!tween) return view === "desk" ? 0 : 1;
+    if (!tween) return view === "orbit" ? 1 : 0;
     const k = easeInOutCubic(tween.t);
-    return view === "desk"
+    return view !== "orbit"
       ? 1 - Math.min(k / DISSOLVE_SPAN, 1)
       : Math.max(0, (k - (1 - DISSOLVE_SPAN)) / DISSOLVE_SPAN);
   }
@@ -374,13 +413,13 @@ export async function boot() {
   function handleAction(action: HotspotAction) {
     switch (action.type) {
       case "focus-desk":
-        goTo("desk");
+        goTo(narrowViewport() ? "screen" : "desk", action.screen ?? 0);
         break;
       case "card":
         openCard(action.card);
         break;
       case "projects":
-        goTo("desk");
+        goTo(narrowViewport() ? "screen" : "desk", 0);
         break;
     }
   }
@@ -410,6 +449,14 @@ export async function boot() {
     },
   );
 
+  // Pinch/drag rig for the narrow-viewport reading view. Constructed on every
+  // device, costing two quaternion reads, but its listeners ignore anything
+  // that isn't a finger and it only steers the camera while `active`.
+  const screenFocus = new ScreenFocus(canvas, camera, [desk.projectsScreen, desk.aboutScreen], {
+    paneGrabbed: () => interaction.grabbingPane,
+    cancelTap: () => interaction.cancelTap(),
+  });
+
   // Built from the props rather than every hotspot: the desk and the monitors
   // explain themselves, and marking them would only add dots to ignore.
   const propMarkers = new PropMarkers(
@@ -422,15 +469,16 @@ export async function boot() {
   );
 
   dom.back.addEventListener("click", () => goTo("orbit"));
+  dom.screenTabs.forEach((tab, i) => tab.addEventListener("click", () => goTo("screen", i)));
   dom.cardClose.addEventListener("click", closeCard);
 
   window.addEventListener("keydown", (event) => {
     if (event.key === "Escape") {
       if (dom.card.dataset.visible === "true") closeCard();
-      else if (view === "desk") goTo("orbit");
+      else if (view !== "orbit") goTo("orbit");
       return;
     }
-    if (view !== "desk") return;
+    if (view === "orbit") return;
     if (event.key === "ArrowDown" || event.key === "ArrowRight") {
       screens.projects.setSelected((screens.projects.selected + 1) % projects.length);
       event.preventDefault();
@@ -472,6 +520,12 @@ export async function boot() {
     updateDeskView();
     renderer.setSize(window.innerWidth, window.innerHeight);
     composer?.setSize(window.innerWidth, window.innerHeight);
+
+    // Turning a phone sideways swaps which framing can hold the monitors, so
+    // the visitor is moved to whichever one now works, landing on the panel
+    // they were already reading.
+    if (view === "screen" && !narrowViewport()) goTo("desk");
+    else if (view === "desk" && narrowViewport()) goTo("screen", screenFocus.screen);
   });
 
   /* ------------------------------ loop ----------------------------- */
@@ -506,6 +560,11 @@ export async function boot() {
     // so unlike him she never dissolves.
     cat.update(elapsed);
 
+    // Kept current before it is read, so a pinch mid-flight is followed rather
+    // than snapped to on arrival.
+    screenFocus.active = view === "screen";
+    if (screenFocus.active) screenFocus.update();
+
     if (tween) {
       tween.t = Math.min(tween.t + dt / tween.duration, 1);
       const k = easeInOutCubic(tween.t);
@@ -513,6 +572,9 @@ export async function boot() {
       controls.target.lerpVectors(tween.fromTarget, tween.to.target, k);
       camera.lookAt(controls.target);
       if (tween.t >= 1) finishTween();
+    } else if (view === "screen") {
+      camera.position.copy(screenFocus.view.position);
+      camera.lookAt(screenFocus.view.target);
     } else if (view === "desk") {
       // Slight drift so the close-up doesn't feel like a frozen screenshot.
       camera.position.set(
@@ -539,6 +601,10 @@ export async function boot() {
   }
 
   frame();
+
+  // The markup ships the mouse wording, since that is what most visitors get
+  // and it should be right before any script runs. A finger needs the other one.
+  if (COARSE_POINTER) dom.hintText.textContent = TOUCH_HINTS.orbit!;
 
   // First frame is on screen; drop the loader.
   requestAnimationFrame(() => {

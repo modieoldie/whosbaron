@@ -2,7 +2,12 @@ import type * as THREE from "three";
 
 /** What a hotspot does when it is clicked. */
 export type HotspotAction =
-  | { type: "focus-desk" }
+  /**
+   * Take the camera in to the desk. `screen` names the panel that was tapped.
+   * The desk view frames both and ignores it; the narrow-viewport reading view
+   * uses it to decide which one to open on.
+   */
+  | { type: "focus-desk"; screen?: 0 | 1 }
   | { type: "card"; card: CardContent }
   | { type: "projects" };
 

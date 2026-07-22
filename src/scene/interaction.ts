@@ -12,6 +12,12 @@ import type { ProjectsScreen, AboutScreen } from "./screens";
 const CLICK_SLOP_PX = 6;
 const CLICK_MAX_MS = 500;
 
+// A finger is not a mouse: it lands on a moving target, rolls a few pixels while
+// it presses, and lifts later than a click does. Holding touches to the mouse
+// thresholds throws away taps the visitor meant.
+const TOUCH_SLOP_PX = 12;
+const TOUCH_MAX_MS = 900;
+
 export interface InteractionCallbacks {
   onAction(action: HotspotAction): void;
   onProjectHover(index: number): void;
@@ -30,6 +36,15 @@ export class Interaction {
   private downY = 0;
   private dragged = false;
 
+  /**
+   * Whether the last pointer to touch the canvas was a finger. Touch has no
+   * hover state at all, no "before the tap", so on touch the whole
+   * highlight/label/cursor path is skipped and picking happens at the tap
+   * itself. Read per event rather than from a media query: a laptop with a
+   * touchscreen is both, depending on which input the visitor just used.
+   */
+  private touch = false;
+
   /** Texture-space Y of the last drag sample on the projects pane, or null. */
   private scrollFrom: number | null = null;
 
@@ -45,6 +60,20 @@ export class Interaction {
   /** Id of the hotspot under the pointer, for the prop markers to track. */
   get hoveredId(): string | null {
     return this.hovered?.id ?? null;
+  }
+
+  /** True while a drag is scrolling the projects detail pane. */
+  get grabbingPane(): boolean {
+    return this.scrollFrom !== null;
+  }
+
+  /**
+   * Abandon the gesture in progress as a click. Used when a second finger
+   * lands: a pinch is not a tap, however still the first finger held.
+   */
+  cancelTap() {
+    this.dragged = true;
+    this.scrollFrom = null;
   }
 
   constructor(
@@ -76,13 +105,24 @@ export class Interaction {
     this.canvas.removeEventListener("wheel", this.onWheel);
   }
 
-  private onPointerMove = (event: PointerEvent) => {
+  /**
+   * Park the raycaster on this event's position. Called from down, move and up
+   * rather than move alone: a tap can produce no pointermove whatsoever, and
+   * picking against wherever the pointer was last left is how touch ends up
+   * hit-testing empty space.
+   */
+  private trackPointer(event: PointerEvent) {
     const rect = this.canvas.getBoundingClientRect();
     this.pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
     this.pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
     this.pointerOnScreen = true;
+  }
 
-    if (Math.hypot(event.clientX - this.downX, event.clientY - this.downY) > CLICK_SLOP_PX) {
+  private onPointerMove = (event: PointerEvent) => {
+    this.trackPointer(event);
+
+    const slop = this.touch ? TOUCH_SLOP_PX : CLICK_SLOP_PX;
+    if (Math.hypot(event.clientX - this.downX, event.clientY - this.downY) > slop) {
       this.dragged = true;
     }
 
@@ -99,6 +139,8 @@ export class Interaction {
   };
 
   private onPointerDown = (event: PointerEvent) => {
+    this.touch = event.pointerType === "touch";
+    this.trackPointer(event);
     this.downAt = performance.now();
     this.downX = event.clientX;
     this.downY = event.clientY;
@@ -144,11 +186,16 @@ export class Interaction {
     return this.screenUV(this.aboutMesh);
   }
 
-  private onPointerUp = () => {
+  private onPointerUp = (event: PointerEvent) => {
     this.scrollFrom = null;
     if (!this.enabled) return;
+    // Pick from where the finger lifted, not from wherever the pointer was last
+    // seen; on touch those are the same only by accident.
+    this.trackPointer(event);
     // An orbit drag that happens to end on a hotspot is not a click.
-    if (this.dragged || performance.now() - this.downAt > CLICK_MAX_MS) return;
+    if (this.dragged || performance.now() - this.downAt > (this.touch ? TOUCH_MAX_MS : CLICK_MAX_MS)) {
+      return;
+    }
 
     if (this.screensLive) {
       const uv = this.projectsUV();
@@ -176,11 +223,35 @@ export class Interaction {
         }
       }
     }
-    if (this.hovered) this.callbacks.onAction(this.hovered.action);
+    // With a mouse the hotspot was already resolved by the hover pass. With a
+    // finger there was no hover pass, so resolve it now.
+    let hotspot = this.hovered;
+    if (this.touch) {
+      this.raycaster.setFromCamera(this.pointer, this.camera);
+      hotspot = this.pickHotspot().hotspot;
+    }
+    if (hotspot) this.callbacks.onAction(hotspot.action);
   };
+
+  /**
+   * The hotspot under the pointer right now, with the point it was struck at so
+   * the label has somewhere to sit. Assumes the raycaster is already aimed.
+   */
+  private pickHotspot(): { hotspot: Hotspot | null; point: THREE.Vector3 | null } {
+    const hit = this.raycaster.intersectObjects(this.hotspotRoots, true)[0];
+    const found = hit ? this.findHotspot(hit.object) : null;
+    // Him, the desk and the monitors all only mean "take me in". Once you are
+    // in, they stop responding entirely rather than offering to fly you
+    // somewhere you already are.
+    const hotspot = found && this.screensLive && found.action.type === "focus-desk" ? null : found;
+    return { hotspot, point: hit?.point ?? null };
+  }
 
   update() {
     if (!this.enabled || !this.pointerOnScreen) return;
+    // Nothing in this pass means anything without a hover state: no highlight to
+    // pre-light, no label to trail, no cursor to change. Touch picks at the tap.
+    if (this.touch) return;
 
     this.raycaster.setFromCamera(this.pointer, this.camera);
 
@@ -211,7 +282,7 @@ export class Interaction {
         return;
       }
 
-      // The about panel doesn't scroll or select — the only live thing on it is
+      // The about panel doesn't scroll or select; the only live thing on it is
       // the row of contact links.
       const aboutUV = this.aboutUV();
       this.aboutScreen.setHoveredLink(aboutUV ? this.aboutScreen.linkAt(aboutUV.x, aboutUV.y) : -1);
@@ -223,12 +294,7 @@ export class Interaction {
       }
     }
 
-    const hit = this.raycaster.intersectObjects(this.hotspotRoots, true)[0];
-    const found = hit ? this.findHotspot(hit.object) : null;
-    // Him, the desk and the monitors all only mean "take me in". Once you are
-    // in, they stop responding entirely — no highlight, no label, no click —
-    // rather than offering to fly you somewhere you already are.
-    const hotspot = found && this.screensLive && found.action.type === "focus-desk" ? null : found;
+    const { hotspot, point } = this.pickHotspot();
 
     if (hotspot !== this.hovered) {
       this.clearHover();
@@ -239,8 +305,8 @@ export class Interaction {
     // Orbiting is off at the desk, so the grab cursor would be a lie there.
     this.canvas.style.cursor = hotspot ? "pointer" : this.screensLive ? "default" : "grab";
 
-    if (hotspot && hit) {
-      this.positionLabel(hotspot.label, hit.point);
+    if (hotspot && point) {
+      this.positionLabel(hotspot.label, point);
     } else {
       this.label.dataset.visible = "false";
     }
