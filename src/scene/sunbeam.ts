@@ -6,7 +6,7 @@
  * geometry does the *visible* shaft, which no three.js light gives you.
  *
  * The shaft is a shell, not a volume, so the shader fakes depth from
- * `dot(normal, view)` — face-on looks down the thickest part of the beam,
+ * `dot(normal, view)`: face-on looks down the thickest part of the beam,
  * edge-on through almost none. Additive and double-sided, that reads as a
  * soft-edged column of air.
  */
@@ -85,7 +85,7 @@ export function buildSunbeam(scene: THREE.Scene): Sunbeam {
 
       void main() {
         // Thickness of air the eye looks through: full facing the shell,
-        // nothing at the silhouette — this is what softens the edges.
+        // nothing at the silhouette. This is what softens the edges.
         float depth = abs(dot(normalize(vNormalW), normalize(vViewW)));
         depth = pow(depth, 1.6);
 

@@ -8,8 +8,8 @@ export interface FigureRig {
   update(elapsed: number): void;
   /**
    * Fade the whole figure, 1 solid to 0 gone. He is the subject of the orbit
-   * view and an obstruction at the desk — you pull up to the monitors and he is
-   * sitting between you and them — so the flight in dissolves him.
+   * view but an obstruction at the desk, sitting between you and the monitors,
+   * so the flight in dissolves him.
    */
   setOpacity(amount: number): void;
 }
@@ -32,19 +32,19 @@ const section = (y: number, rx: number, rz: number, z = 0): LoftRing => ({
   ry: rz,
 });
 
-/** A circular profile — limbs, fingers, zip teeth. */
+/** A circular profile: limbs, fingers, zip teeth. */
 const round = (table: Table) => (t: number) => {
   const r = knots(table, t);
   return [r, r] as const;
 };
 
-/** A flattened profile — palms, ears, shoes, anything pressed. */
+/** A flattened profile: palms, ears, shoes, anything pressed. */
 const oval = (wide: Table, thick: Table) => (t: number) =>
   [knots(wide, t), knots(thick, t)] as const;
 
 const point = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
 
-/** With +X, the ring frame for a form stacked toward -Z — a foot. */
+/** With +X, the ring frame for a form stacked toward -Z, such as a foot. */
 const RING_DOWN = new THREE.Vector3(0, -1, 0);
 
 /** A standing cross-section for a form stacked toward -Z: `rx` across, `ry` tall. */
@@ -74,9 +74,9 @@ const HEAD_H = 0.112;
 const HEAD_D = 0.098;
 
 // All indexed by height on the unit sphere: -1 is under the chin, 1 the crown.
-// Width stays past 1 through the jaw and cheekbones — wider there than a sphere
-// would be — then falls away fast to the chin, which is the single silhouette
-// cue that says "face" from behind and above, where this figure is mostly seen.
+// Width stays past 1 through the jaw and cheekbones, wider there than a sphere
+// would be, then falls away fast to the chin. That is the single silhouette cue
+// saying "face" from behind and above, where this figure is mostly seen.
 const HEAD_WIDTH: Table = [
   [-1, 0.72], [-0.7, 0.94], [-0.45, 1.06], [-0.2, 1.05],
   [0.05, 1.0], [0.4, 0.99], [0.75, 0.93], [1, 0.84],
@@ -124,7 +124,7 @@ const CAP_TILT = 0.2;
 /** Panels around the crown. Six, as a baseball cap is. */
 const CAP_PANELS = 6;
 
-/** Where the crown's top ends up once raked back — the button, and the mast. */
+/** Where the crown's top ends up once raked back: the button, and the mast. */
 const CAP_CROWN = new THREE.Vector3(0, 1, 0).applyAxisAngle(new THREE.Vector3(1, 0, 0), CAP_TILT);
 
 /** Pushes a unit sphere's vertices through `headSurface`, in place. */
@@ -370,7 +370,7 @@ export function buildFigure(): FigureRig {
 
   // A horseshoe rather than a ring: the gap where the ends stop *is* the
   // opening, and each round cap is the rolled edge of the fabric. Tallest at
-  // the nape, falling away toward the throat — a collar no longer held shut.
+  // the nape, falling away toward the throat: a collar no longer held shut.
   const collar = track(
     new THREE.Mesh(
       limb(
@@ -428,7 +428,7 @@ export function buildFigure(): FigureRig {
     );
   }
 
-  // The closed run below the slider, teeth as a brass thread laid into it — the
+  // The closed run below the slider, teeth as a brass thread laid into it: the
   // one warm highlight on him, and what reads as a zip rather than a seam.
   torso.add(
     track(
@@ -578,7 +578,7 @@ export function buildFigure(): FigureRig {
     ),
   );
 
-  // Four blades, long and narrow at a pitch — dragonfly, not aircraft.
+  // Four blades, long and narrow at a pitch: dragonfly, not aircraft.
   for (let i = 0; i < 4; i++) {
     const arm = new THREE.Group();
     arm.rotation.y = (i / 4) * Math.PI * 2;
@@ -679,10 +679,9 @@ export function buildFigure(): FigureRig {
   const toTorso = (p: readonly [number, number, number]) =>
     torso.worldToLocal(point(p[0], p[1], p[2]));
 
-  // Elbows are a two-link solve held at desk height and flared outward. Held
-  // there because the alternative — elbows dropped to the sides, as they hang
-  // when you are not typing — runs the forearms straight through the desk's
-  // front edge on the way up to the keys.
+  // Elbows are a two-link solve held at desk height and flared outward. The
+  // alternative, elbows dropped to the sides as they hang when you are not
+  // typing, runs the forearms through the desk's front edge on the way to the keys.
   const UPPER_ARM = round([[0, 0.068], [0.3, 0.056], [0.7, 0.049], [1, 0.044]]);
   const FOREARM = round([[0, 0.044], [0.2, 0.049], [0.55, 0.042], [1, 0.030]]);
 
@@ -727,7 +726,6 @@ export function buildFigure(): FigureRig {
     );
 
     // Forearm and hand hang off a pivot at the elbow so they can be animated.
-  
     const elbowGroup = new THREE.Group();
     elbowGroup.position.copy(elbow);
     torso.add(elbowGroup);
@@ -781,10 +779,10 @@ export function buildFigure(): FigureRig {
       ),
     );
 
-    // One piece, no sole slab — a flat plate reads as a plane edge-on from
-    // every angle in this room. Sections are stacked rather than swept, because
-    // a sweep ends in a round cap and a heel is not a dome: this closes the
-    // back over 7mm instead of the 50mm a cap that size would take.
+    // One piece, no sole slab: a flat plate reads as a plane edge-on from every
+    // angle in this room. Sections are stacked rather than swept, because a
+    // sweep ends in a round cap and a heel is not a dome: this closes the back
+    // over 7mm instead of the 50mm a cap that size would take.
     const foot = side * 0.146;
     group.add(
       track(
@@ -814,10 +812,10 @@ export function buildFigure(): FigureRig {
   let nextNudge = 1.4;
   let nudgeDir = 1;
 
-  // Every material here was created in this function, so fading them is safe —
+  // Every material here was created in this function, so fading them is safe;
   // nothing else in the room shares one. Collected from the graph rather than
-  // from `meshes` so the odds and ends that aren't tracked as hover targets —
-  // the eyes, the zip, the cap and its propeller — fade with the rest of him.
+  // from `meshes` so the odds and ends that aren't tracked as hover targets
+  // (eyes, zip, cap, propeller) fade with the rest of him.
   const materials = new Set<THREE.Material>();
   group.traverse((child) => {
     const material = (child as THREE.Mesh).material;
@@ -830,7 +828,7 @@ export function buildFigure(): FigureRig {
     meshes,
     setOpacity(amount: number) {
       // Below a pixel's worth of alpha he is off entirely, which also takes him
-      // out of the raycaster — no invisible hotspot left floating at the desk.
+      // out of the raycaster: no invisible hotspot left floating at the desk.
       group.visible = amount > 0.004;
       for (const material of materials) {
         material.transparent = amount < 1;
@@ -840,7 +838,7 @@ export function buildFigure(): FigureRig {
       }
     },
     update(elapsed: number) {
-      // Breathing: the chest swells mostly front to back, plus a matching micro-lean.
+      // Breathing: the chest swells front to back, plus a matching micro-lean.
       const breath = Math.sin(elapsed * 1.15);
       sweatshirt.scale.set(1 + breath * 0.006, 1, 1 + breath * 0.014);
       torso.rotation.x = restLean + breath * 0.006;

@@ -5,7 +5,7 @@
  * Round primitives are built at a segment count high enough that the silhouette
  * still reads as a curve when you orbit right up to it, and boxes get their
  * edges rounded so an edge catches a highlight instead of terminating in a hard
- * black line. Both are cheap — this scene's triangle budget is nowhere near
+ * black line. Both are cheap; this scene's triangle budget is nowhere near
  * anything a GPU would notice.
  */
 
@@ -19,8 +19,8 @@ export const RINGS = 32;
 
 /**
  * A box with rounded edges. `radius` defaults to a fraction of the shortest
- * side, which softens thin slabs — a desk top, a phone — without inflating them
- * into pills.
+ * side, which softens thin slabs like a desk top or a phone without inflating
+ * them into pills.
  */
 export function roundedBox(
   width: number,

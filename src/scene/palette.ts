@@ -46,8 +46,8 @@ export const HEX = {
   catFur: 0x6a5335,
   catStripe: 0x342719,
   catSpine: 0x241a10,
-  catCream: 0x7c6440, // underside — a lighter brown, not a cream
-  catSock: 0x8a7047, // toes — the lightest brown she has
+  catCream: 0x7c6440, // underside; a lighter brown, not a cream
+  catSock: 0x8a7047, // toes; the lightest brown she has
   catNose: 0x5c4032, // darker than the muzzle, or it reads as a highlight
   catEar: 0x6d4c3c,
 

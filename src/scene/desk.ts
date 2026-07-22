@@ -1,7 +1,7 @@
 /**
  * The white desk, the two monitors on their arms, the tower, and the chair.
  *
- * Screen surfaces use MeshBasicMaterial with `toneMapped = false` — a monitor
+ * Screen surfaces use MeshBasicMaterial with `toneMapped = false`: a monitor
  * emits light, it does not receive it, and running it through the tone mapper
  * is what makes most 3D screens look like printed stickers.
  */
@@ -114,15 +114,14 @@ export function buildDesk(
     screen.position.set(0, SCREEN_Y, 0.0015);
     monitor.add(screen);
 
-    // No brand dot on the chin: a small brass circle floating over the desk is
-    // now the room's word for "this is a hotspot", and one baked into the bezel
-    // reads as a marker you can't click.
+    // No brand dot on the chin: a small brass circle is the room's word for
+    // "hotspot", and one baked into the bezel reads as a marker you can't click.
 
     /* --------------------------- the arm --------------------------- */
 
     // A C-clamp on the desk's rear edge, a post, and a strut out to the VESA
     // plate. The rig is parented to the monitor group so the arm follows the
-    // panel instead of pointing at it sideways — but the clamp itself is
+    // panel instead of pointing at it sideways. The clamp itself is
     // counter-rotated back to square, because a real one grips the desk edge
     // flush and lets the arm absorb the toe-in.
     const spineZ = deskEdgeZ - 0.014;
@@ -183,7 +182,7 @@ export function buildDesk(
   keyboardBody.rotation.y = 0.03;
   group.add(keyboardBody);
 
-  // 70 keycaps as one InstancedMesh — the detail is free, the draw call is one.
+  // 70 keycaps as one InstancedMesh: the detail is free, the draw call is one.
   const COLS = 14;
   const ROWS = 5;
   const keycaps = new THREE.InstancedMesh(
@@ -220,7 +219,7 @@ export function buildDesk(
   tower.position.set(1.3, 0.22, -1.32);
   group.add(tower);
 
-  // Tempered-glass side panel with a brass glow inside — every build has one.
+  // Tempered-glass side panel with a brass glow inside.
   const glass = new THREE.Mesh(
     new THREE.PlaneGeometry(0.4, 0.4),
     new THREE.MeshStandardMaterial({
@@ -237,7 +236,7 @@ export function buildDesk(
   glass.position.set(1.199, 0.22, -1.32);
   group.add(glass);
 
-  // No power LED on the tower either: same reason as the monitor chins. The
+  // No power LED on the tower either, same reason as the monitor chins: the
   // glow through the glass panel already says the machine is on.
 
   /* ------------------------------ chair ----------------------------- */
@@ -271,7 +270,6 @@ function buildChair(): THREE.Group {
   post.position.set(0, 0.24, 0);
   chair.add(post);
 
-  // Five-star base, because office chairs are legally required to have five.
   const armGeometry = roundedBox(0.028, 0.022, 0.3, 0.01);
   const casterGeometry = new THREE.CylinderGeometry(0.028, 0.028, 0.018, RADIAL);
   for (let i = 0; i < 5; i++) {

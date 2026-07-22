@@ -1,8 +1,8 @@
 /**
  * Everything that glows in this room is a 2D canvas painted into a CanvasTexture.
  *
- * The monitors are the whole point of the scene, so they get real UI rather than
- * a screenshot
+ * The monitors are the whole point of the scene, so they get real UI rather
+ * than a screenshot.
  */
 
 import * as THREE from "three";
@@ -11,14 +11,10 @@ import { projects, profile, education, skills } from "../data/content";
 
 const SERIF = '"Cormorant Garamond", Georgia, serif';
 
-/**
- * Height of the window chrome on every screen.
- */
+/** Height of the window chrome on every screen. */
 const TITLE_BAR = 56;
 
-/**
- * A clickable line on a screen, positioned in that screen's content space.
- */
+/** A clickable line on a screen, positioned in that screen's content space. */
 export type ScreenLink = { href: string; label: string; text: string; x: number; y: number; w: number };
 
 /** Padding around a link's painted box, so a near-miss still counts as a hit. */
@@ -27,7 +23,7 @@ const LINK_PAD = { x: 10, top: 22, bottom: 10 };
 /**
  * Side of the square every screen is averaged down to before its colour is read.
  * One pixel would do the job in theory, but a single-step downscale to 1×1 is
- * the case browsers filter worst — 8×8 costs nothing and is actually a mean.
+ * the case browsers filter worst; 8×8 costs nothing and is actually a mean.
  */
 const SAMPLE_N = 8;
 
@@ -43,9 +39,7 @@ function sampler(): CanvasRenderingContext2D {
   return samplerCtx;
 }
 
-/**
- * How hard the sampled cast is pushed before a light is allowed to use it.
- */
+/** How hard the sampled cast is pushed before a light is allowed to use it. */
 const SAMPLE_SATURATE = 2.2;
 
 /** Index of the link under a content-space point, or -1. */
@@ -104,8 +98,8 @@ abstract class CanvasScreen {
   private castStale = true;
 
   /**
-   * Recomputed only after a repaint — the screens already redraw on change rather than on a clock, 
-   * so this rides that for freeinstead of reading back a canvas every frame.
+   * Recomputed only after a repaint. The screens redraw on change rather than
+   * on a clock, so this rides that instead of reading back a canvas per frame.
    */
   screenCast(): THREE.Color {
     if (!this.castStale) return this.cast;
@@ -245,7 +239,7 @@ abstract class CanvasScreen {
 }
 
 /* ------------------------------------------------------------------ *
- * Left monitor — the projects browser. This is the site's navigation. *
+ * Left monitor: the projects browser. This is the site's navigation. *
  * ------------------------------------------------------------------ */
 
 const SIDEBAR_W = 400;
@@ -255,7 +249,7 @@ const LIST_TOP = 118;
 /**
  * The detail pane is a scrolling viewport, not a fixed poster: a project's
  * blurb, stack, every bullet and its links are laid out in full and clipped to
- * the band below the title bar. Nothing is truncated — the reader scrolls.
+ * the band below the title bar. Nothing is truncated; the reader scrolls.
  */
 const DETAIL_TOP = TITLE_BAR;
 const DETAIL_BOTTOM_PAD = 18;
@@ -437,7 +431,7 @@ export class ProjectsScreen extends CanvasScreen {
   }
 
   /**
-   * Lay the whole project out in content space — nothing capped, nothing
+   * Lay the whole project out in content space: nothing capped, nothing
    * ellipsised. Y is measured from the top of the viewport, so the painter only
    * has to translate by the scroll offset.
    */
@@ -626,13 +620,13 @@ export class ProjectsScreen extends CanvasScreen {
 }
 
 /* ------------------------------------------------------------------ *
- * Right monitor — whoami.                                             *
+ * Right monitor: whoami.                                             *
  *                                                                     *
  * The left monitor answers "what has he built". This one answers the  *
  * questions a recruiter asks next, in the order they ask them: who,   *
  * when does he graduate, what does he know, how do I reach him. It    *
  * keeps the shell chrome so the two panels stay visually distinct.    *
- * Everything on it is real — the only motion is the prompt caret.     *
+ * Everything on it is real; the only motion is the prompt caret.     *
  * ------------------------------------------------------------------ */
 
 /** Skill group names, shortened to fit the label gutter. */
@@ -645,7 +639,7 @@ const GROUP_LABEL: Record<string, string> = {
 
 /* Vertical stops. Hand-placed rather than flowed: the panel is a fixed 640 tall
  * and the blocks are known, so there is nothing for a layout pass to decide.
- * The skill rows are the one exception — they wrap, so they flow from `rows`
+ * The skill rows are the one exception: they wrap, so they flow from `rows`
  * and are sized to land above `rule2`. */
 const ABOUT = {
   prompt: 96,
@@ -666,7 +660,7 @@ const ROW_LABEL_X = 28;
 const ROW_VALUE_X = 200;
 /** Contact links sit in two columns; four of them fill exactly two rows. */
 const LINK_COL_X = [28, 528];
-/** Larger than the projects pane's links — this panel is read, not scanned. */
+/** Larger than the projects pane's links: this panel is read, not scanned. */
 const ABOUT_LINK_FONT = `400 18px ${MONO}`;
 
 export class AboutScreen extends CanvasScreen {
@@ -684,7 +678,7 @@ export class AboutScreen extends CanvasScreen {
 
   /**
    * The four ways out of this room, laid out once. Nothing here moves, so the
-   * layout is computed on first use and kept — unlike the projects pane, there
+   * layout is computed on first use and kept. Unlike the projects pane, there
    * is no selection or scroll to invalidate it.
    */
   private links(): ScreenLink[] {
@@ -792,7 +786,7 @@ export class AboutScreen extends CanvasScreen {
     this.rule(ABOUT.rule1);
   }
 
-  /** Education first — the fact a recruiter is scanning for — then the stack. */
+  /** Education first, the fact a recruiter is scanning for, then the stack. */
   private drawRows() {
     const c = this.ctx;
     const school = education[0]!;
@@ -860,7 +854,7 @@ function gradDate(): string {
 }
 
 /* ------------------------------------------------------- *
- * The sketchpad on the desk — Conway, stepping forever.    *
+ * The sketchpad on the desk: Conway, stepping forever.     *
  * ------------------------------------------------------- */
 
 export class ConwayScreen extends CanvasScreen {
@@ -901,7 +895,7 @@ export class ConwayScreen extends CanvasScreen {
         for (let dy = -1; dy <= 1; dy++) {
           for (let dx = -1; dx <= 1; dx++) {
             if (!dx && !dy) continue;
-            // Toroidal wrap — gliders leave one edge and come back the other.
+            // Toroidal wrap: gliders leave one edge and come back the other.
             const nx = (x + dx + this.cols) % this.cols;
             const ny = (y + dy + this.rows) % this.rows;
             n += this.grid[ny * this.cols + nx]!;
@@ -915,7 +909,7 @@ export class ConwayScreen extends CanvasScreen {
     }
 
     this.grid = next;
-    if (alive < 12) this.seed(); // Died out or froze — reseed rather than sit still.
+    if (alive < 12) this.seed(); // Died out or froze; reseed rather than sit still.
   }
 
   update(dt: number) {
@@ -947,29 +941,24 @@ export class ConwayScreen extends CanvasScreen {
 }
 
 /* ------------------------------------------------------- *
- * The phone face-up on the desk — a lock screen, awake.   
- * notificationarrives, sits for a few seconds and fades,  
- *  the phone goes back to the clock. 
+ * The phone face-up on the desk: a lock screen, awake. A   *
+ * notification arrives, sits for a few seconds and fades,  *
+ * then the phone goes back to the clock.                   *
  * ------------------------------------------------------- */
 
 /** Seconds between notifications. Everything below is an offset into one cycle. */
 const PHONE_CYCLE = 20;
 
-/**
- * The banner's life inside a cycle, in seconds. The slow fade out
- */
+/** The banner's life inside a cycle, in seconds. */
 const BANNER = { in: 0.45, hold: 6.5, out: 8.6 };
 
-/**
- * What comes in.
- */
 const BANNER_FEED: { app: string; badge: string; title: string; body: string }[] = [
   { app: "MAIL", badge: "M", title: "Recruiting", body: "Re: Summer 2027 internship" },
   { app: "GITHUB", badge: "G", title: "whosbaron", body: "All checks passed on main" },
   { app: "CALENDAR", badge: "C", title: "Standup", body: "In 15 minutes · Zoom" },
 ];
 
-/** The lock screen's own palette. Dimmer than the monitors*/
+/** The lock screen's own palette. Dimmer than the monitors. */
 const PHONE = {
   top: "#0d1117",
   bottom: "#151b26",
@@ -1002,7 +991,7 @@ export class PhoneScreen extends CanvasScreen {
     return 0;
   }
 
-  /** Real wall-clock time */
+  /** Real wall-clock time. */
   private clockAt(): string {
     const now = new Date();
     return `${now.getHours() % 12 || 12}:${String(now.getMinutes()).padStart(2, "0")}`;
@@ -1015,7 +1004,7 @@ export class PhoneScreen extends CanvasScreen {
       this.banner = (this.banner + 1) % BANNER_FEED.length;
     }
 
-    // Repaint only while the banner is actually moving, and once a minute for the clock.
+    // Repaint only while the banner is moving, and once a minute for the clock.
     const alpha = this.alphaAt(this.t);
     if (Math.abs(alpha - this.alpha) > 0.002) {
       this.alpha = alpha;

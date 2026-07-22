@@ -55,7 +55,7 @@ export class ScreenGlow {
   }
 
   update(elapsed: number, dt: number) {
-    // Framerate-independent easing: the same fraction of the remaining gap per second, however long the frame took.
+    // Framerate-independent easing: same fraction of the remaining gap per second.
     const k = 1 - Math.exp(-dt / TINT_RESPONSE);
 
     for (const entry of this.entries) {

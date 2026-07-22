@@ -1,11 +1,11 @@
 /**
- * Dust hanging in the air over the desk — faint texture so the volume between
- * the camera and the desk stops reading as empty.
+ * Dust hanging in the air over the desk, so the volume between the camera and
+ * the desk stops reading as empty.
  *
  * Deliberately unattached to the sunbeam, and normally blended rather than
  * additive: additive motes turn into sparks and the bloom pass finds them.
  *
- * All motion is in the vertex shader off a per-mote seed — one draw call, no
+ * All motion is in the vertex shader off a per-mote seed: one draw call, no
  * CPU work per frame.
  */
 
@@ -30,7 +30,7 @@ export interface Dust {
   setPixelRatio(ratio: number): void;
   /**
    * How much of the cloud is present, 0–1. The desk view puts the camera inside
-   * the box, where motes read as specks on the glass — so it fades to 0.
+   * the box, where motes read as specks on the glass, so it fades to 0.
    */
   setPresence(k: number): void;
 }
@@ -53,8 +53,8 @@ export function buildDust(scene: THREE.Scene): Dust {
   }
 
   const geometry = new THREE.BufferGeometry();
-  // Zeroed — the shader places every mote from its seed — but the attribute has
-  // to exist for three.js to size the draw.
+  // Zeroed, since the shader places every mote from its seed, but the attribute
+  // has to exist for three.js to size the draw.
   geometry.setAttribute("position", new THREE.BufferAttribute(new Float32Array(COUNT * 3), 3));
   geometry.setAttribute("aSeed", new THREE.BufferAttribute(seed, 3));
   geometry.setAttribute("aPhase", new THREE.BufferAttribute(phase, 1));

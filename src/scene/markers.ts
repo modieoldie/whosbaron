@@ -1,6 +1,6 @@
 /**
- * Markers for the desk props. Each object on the desk stands for something —
- * the framed diploma is school, the books are the stack — and none of that is guessable
+ * Markers for the desk props. Each object stands for something (the framed
+ * diploma is school, the books are the stack) and none of that is guessable
  * from a silhouette, so every prop carries a small brass dot above it saying
  * "there is something here". Titles stay on hover: eight of them standing in
  * the room at once collapse into unreadable overlap the moment you orbit off
@@ -44,7 +44,7 @@ export class PropMarkers {
     private container: HTMLElement,
     hotspots: Hotspot[],
     private camera: THREE.Camera,
-    /** Everything a dot can hide behind — in practice, the whole scene. */
+    /** Everything a dot can hide behind; in practice, the whole scene. */
     private occluders: THREE.Object3D[],
     private canvas: HTMLCanvasElement,
     private reducedMotion: boolean,

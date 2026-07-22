@@ -5,7 +5,7 @@ import { DESK_TOP_Y, DESK_WIDTH } from "./desk";
 
 export interface CatRig {
   group: THREE.Group;
-  /** Breathing — the only motion she has; she is asleep. */
+  /** Breathing, the only motion she has; she is asleep. */
   update(elapsed: number): void;
 }
 
@@ -14,12 +14,12 @@ type Table = readonly (readonly [number, number])[];
 const point = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
 const Y_AXIS = new THREE.Vector3(0, 1, 0);
 
-/** Circular profile — legs, tail. */
+/** Circular profile: legs, tail. */
 const round = (table: Table) => (t: number) => {
   const r = knots(table, t);
   return [r, r] as const;
 };
-/** Elliptical profile — separate width and height tables. */
+/** Elliptical profile: separate width and height tables. */
 const oval = (wide: Table, tall: Table) => (t: number) =>
   [knots(wide, t), knots(tall, t)] as const;
 
@@ -86,7 +86,7 @@ function alongSpine(spine: readonly THREE.Vector3[], samples = 160) {
 }
 
 /**
- * One whisker. Not `strut` — at a few pixels wide, its 48-segment capsule would
+ * One whisker. Not `strut`: at a few pixels wide, its 48-segment capsule would
  * spend thousands of triangles on a curve nobody can see.
  */
 function whiskerAt(from: THREE.Vector3, to: THREE.Vector3, material: THREE.Material): THREE.Mesh {
@@ -119,8 +119,8 @@ const BODY_TALL: Table = [[0, 0.044], [0.22, 0.06], [0.5, 0.062], [0.78, 0.056],
 
 /**
  * An offset in room axes, restated in the cat's yawed space. The tail is aimed
- * at the desk's right edge, which is a fact about the room — so re-yawing her
- * keeps the tail on the edge.
+ * at the desk's right edge, a fact about the room, so re-yawing her keeps the
+ * tail on the edge.
  */
 const fromRoom = (x: number, y: number, z: number) =>
   new THREE.Vector3(x, y, z).applyAxisAngle(Y_AXIS, -CAT_YAW);
@@ -128,14 +128,14 @@ const fromRoom = (x: number, y: number, z: number) =>
 /** How far the desk's right edge lies from her, along the room's x. */
 const EDGE = DESK_WIDTH / 2 - CAT_X;
 
-/** Where the tail leaves the rump — where the body's own spine ends. */
+/** Where the tail leaves the rump, i.e. where the body's own spine ends. */
 const TAIL_ROOT_X = 0.093;
 /** The flat stretch out to the edge. */
 const RUN = EDGE - TAIL_ROOT_X;
 /** How far below the desk top the tip falls once it is over the side. */
 const HANG = 0.088;
 
-// Out of the rump, flat across the desk, then dropped at the lip — the spine is
+// Out of the rump, flat across the desk, then dropped at the lip. The spine is
 // dense through the bend so the curve takes it as a drape, not a corner.
 // Stations are fractions of `RUN`, so moving her toward the edge shortens the
 // tail instead of folding it back on itself.
@@ -171,7 +171,7 @@ export function buildCat(scene: THREE.Scene): CatRig {
   const nosePink = new THREE.MeshStandardMaterial({ color: HEX.catNose, roughness: 0.55 });
   const earPink = new THREE.MeshStandardMaterial({ color: HEX.catEar, roughness: 0.85 });
   const closedEye = new THREE.MeshStandardMaterial({ color: 0x241a11, roughness: 0.7 });
-  // Brown, only a little lighter than the muzzle — pale whiskers read as white.
+  // Brown, only a little lighter than the muzzle; pale whiskers read as white.
   const whiskerHair = new THREE.MeshStandardMaterial({ color: 0x8d7750, roughness: 0.5 });
 
   /* -------------------------------- body -------------------------------- */
@@ -234,7 +234,7 @@ export function buildCat(scene: THREE.Scene): CatRig {
   head.add(
     new THREE.Mesh(
       paint(skull, (p) => {
-        // Muzzle and chin go cream; fine stripes run back off the brow — the
+        // Muzzle and chin go cream; fine stripes run back off the brow as the
         // tabby "M".
         const muzzle = smoothstep(p.z, 0.014, 0.038) * (1 - smoothstep(p.y, -0.02, 0.012));
         scratch.copy(FUR).lerp(CREAM, Math.min(muzzle, 0.92));
@@ -305,8 +305,8 @@ export function buildCat(scene: THREE.Scene): CatRig {
 
   /* -------------------------------- legs --------------------------------- */
 
-  // All four legs are a form swept along a spine that starts inside the body —
-  // the cap at the hip is buried in the flank, so there is no seam to orbit to.
+  // All four legs are swept along a spine that starts inside the body, so the
+  // cap at the hip is buried in the flank and there is no seam to orbit to.
   //
   // The toes lift to her lightest brown over the last fifth. `SOCK_IN`/
   // `SOCK_FULL` are fractions of each leg's length, so all four match on legs
@@ -340,7 +340,7 @@ export function buildCat(scene: THREE.Scene): CatRig {
     );
 
     // Hind: hip buried high in the flank, down and out to the hock, then
-    // forward to the toes — a folded leg.
+    // forward to the toes: a folded leg.
     //
     // Measured from `CURL`, not x = 0: the curl puts her flanks at -0.088 and
     // +0.064, so a mirrored ±x swallows the right leg and beaches the left.
@@ -360,7 +360,7 @@ export function buildCat(scene: THREE.Scene): CatRig {
   return {
     group,
     update(elapsed: number) {
-      // Scaled about the group origin — the desk surface — so the swell is all
+      // Scaled about the group origin, the desk surface, so the swell is all
       // upward and she never lifts off it.
       const breath = Math.sin(elapsed * 0.9) * 0.5 + 0.5;
       body.scale.set(1 + breath * 0.012, 1 + breath * 0.02, 1);

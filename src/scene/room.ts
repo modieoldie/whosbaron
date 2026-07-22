@@ -1,8 +1,7 @@
 /**
- * The room is open floor and light — no walls, no ceiling, nothing to orbit
- * into. Fog does the job the back wall used to: the floor fades into the
- * background colour long before its edge, so the space reads as large and
- * unbounded from every angle instead of as a box you are stuck inside.
+ * The room is open floor and light: no walls, no ceiling, nothing to orbit
+ * into. Fog does the job the back wall used to, fading the floor into the
+ * background colour long before its edge so the space reads as unbounded.
  *
  * Everything is arranged around ROOM_CENTER_Z, which is the middle of the
  * desk-and-figure ensemble. That is the centre of the room.
@@ -83,7 +82,7 @@ export function buildRoom(scene: THREE.Scene): RoomLights {
   warmFill.position.set(-1.7, 1.5, -0.5);
   scene.add(warmFill);
 
-  // Brass rim from behind the desk — separates the silhouette from the dark.
+  // Brass rim from behind the desk, separating the silhouette from the dark.
   const rim = new THREE.PointLight(0xc9a961, 1.6, 5, 2);
   rim.position.set(1.6, 1.95, -1.95);
   scene.add(rim);
