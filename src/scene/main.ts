@@ -16,6 +16,7 @@ import { OutputPass } from "three/examples/jsm/postprocessing/OutputPass.js";
 
 import { buildRoom, ROOM_CENTER_Z } from "./room";
 import { buildDesk, MONITOR_X, SCREEN_W, SCREEN_Y, SCREEN_Z } from "./desk";
+import { buildLounge } from "./lounge";
 import { buildProps } from "./props";
 import { buildFigure } from "./figure";
 import { buildCat } from "./cat";
@@ -222,6 +223,10 @@ export async function boot() {
 
   const room = buildRoom(scene);
   const desk = buildDesk(scene, screens);
+  // The patterned rug under the desk, plus the sunken conversation pit behind
+  // the chair. Nothing here is clickable: it is set dressing for depth, not
+  // another thing to hunt through.
+  const lounge = buildLounge(scene, ROOM_CENTER_Z);
   const props = buildProps(scene, screens.conway, screens.phone);
   const cat = buildCat(scene);
   // After the room, so the additive passes sort on top of the surfaces.
@@ -551,6 +556,7 @@ export async function boot() {
     glow.update(elapsed, dt);
     sunbeam.update(elapsed);
     dust.update(elapsed);
+    lounge.update(elapsed);
 
     // Driven every frame even while he is dissolved out: the idle is built from
     // continuous sines, and freezing it would mean he snaps to a new pose the

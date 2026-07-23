@@ -39,6 +39,20 @@ export const HEX = {
   chair: 0x1c1e22,
   chairMesh: 0x2a2d33,
 
+  // The cut edge of the rug pile: the dark side of its woven field, so the
+  // slab's sides read as the same cloth as its face.
+  velvetDeep: 0x4d1a24,
+
+  // Warm fall-brown wool for the conversation pit's wraparound seating, after
+  // the Miller House pit this is lifted from, plus a near-black ebony for its
+  // stair and bench frame. The seat runs bright where the pile faces the lamp
+  // and near-black in the wells; `pitLift` is only the colour of that sheen.
+  pit: 0x6f4a2b,
+  pitLift: 0x9a6a3c,
+  pitDeep: 0x452c17,
+  pitFrame: 0x241a12,
+  pitCarpet: 0x5a3a20,
+
   // Dark brown mackerel tabby: one hue at four values, so stripe against
   // ground, toe against leg and nose against muzzle all separate on lightness
   // alone. Mixed per-vertex and never used flat. Any darker and the bands stop

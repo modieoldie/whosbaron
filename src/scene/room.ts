@@ -11,6 +11,7 @@ import * as THREE from "three";
 import { RectAreaLightUniformsLib } from "three/examples/jsm/lights/RectAreaLightUniformsLib.js";
 import { HEX } from "./palette";
 import { MONITOR_X, SCREEN_H, SCREEN_W, SCREEN_Y, SCREEN_Z } from "./desk";
+import { PIT } from "./lounge";
 
 /**
  * The desk sits at the back of the ensemble and the chair at the front; this is
@@ -32,25 +33,39 @@ export function buildRoom(scene: THREE.Scene): RoomLights {
 
   /* ---------------------------- surfaces ---------------------------- */
 
-  // Far wider than anything you can orbit to. The fog reaches its full density
-  // well inside this radius, so the edge is never on screen.
+  // Far wider than anything you can orbit to, with a rectangular bite taken out
+  // for the conversation pit: the pit's seating and footwell live below this
+  // plane, so the plane has to open up over them or it would roof them over.
+  // The fog reaches full density well inside the outer edge, so that edge is
+  // never on screen.
+  const floorShape = new THREE.Shape();
+  floorShape.moveTo(-24, -24);
+  floorShape.lineTo(24, -24);
+  floorShape.lineTo(24, 24);
+  floorShape.lineTo(-24, 24);
+  floorShape.closePath();
+
+  // Shape space is X/Y; once the mesh is laid flat by the -90° X rotation, its
+  // Y axis maps to world -Z, which is why the hole's depth is negated here.
+  const hole = new THREE.Path();
+  const hw = PIT.width / 2;
+  const hd = PIT.depth / 2;
+  hole.moveTo(PIT.x - hw, -PIT.z - hd);
+  hole.lineTo(PIT.x + hw, -PIT.z - hd);
+  hole.lineTo(PIT.x + hw, -PIT.z + hd);
+  hole.lineTo(PIT.x - hw, -PIT.z + hd);
+  hole.closePath();
+  floorShape.holes.push(hole);
+
   const floor = new THREE.Mesh(
-    new THREE.PlaneGeometry(48, 48),
+    new THREE.ShapeGeometry(floorShape),
     new THREE.MeshStandardMaterial({ color: HEX.floor, roughness: 0.92, metalness: 0.02 }),
   );
   floor.rotation.x = -Math.PI / 2;
-  floor.position.set(0, 0, ROOM_CENTER_Z);
   scene.add(floor);
 
-  // The rug is what gives the open floor a sense of scale now that there are no
-  // walls to measure against, so it is sized to frame the desk and the chair.
-  const rug = new THREE.Mesh(
-    new THREE.PlaneGeometry(4.8, 3.4),
-    new THREE.MeshStandardMaterial({ color: HEX.rug, roughness: 1 }),
-  );
-  rug.rotation.x = -Math.PI / 2;
-  rug.position.set(0, 0.004, ROOM_CENTER_Z);
-  scene.add(rug);
+  // The rug that gives the open floor a sense of scale is the patterned slab
+  // built in `lounge.ts`, laid under the desk and chair from there.
 
   /* ----------------------------- lights ----------------------------- */
 
