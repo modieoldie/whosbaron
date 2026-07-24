@@ -26,6 +26,12 @@ export interface InteractionCallbacks {
   onScreenLink(href: string): void;
 }
 
+/** Is `node` somewhere under `root` in the scene graph? */
+function isDescendant(node: THREE.Object3D, root: THREE.Object3D): boolean {
+  for (let p = node.parent; p; p = p.parent) if (p === root) return true;
+  return false;
+}
+
 export class Interaction {
   private raycaster = new THREE.Raycaster();
   private pointer = new THREE.Vector2(-10, -10);
@@ -49,6 +55,8 @@ export class Interaction {
   private scrollFrom: number | null = null;
 
   private hotspotRoots: THREE.Object3D[] = [];
+  /** Hotspots with another hotspot nested somewhere inside them. */
+  private nests = new Set<Hotspot>();
   private hovered: Hotspot | null = null;
   private originalEmissive = new WeakMap<THREE.Mesh, THREE.Material | THREE.Material[]>();
 
@@ -56,6 +64,8 @@ export class Interaction {
   enabled = true;
   /** In desk view the monitors become interactive; in orbit view they don't. */
   screensLive = false;
+  /** True in orbit view. Navigation hotspots only respond from here. */
+  orbitView = true;
 
   /** Id of the hotspot under the pointer, for the prop markers to track. */
   get hoveredId(): string | null {
@@ -87,7 +97,14 @@ export class Interaction {
     private label: HTMLElement,
     private callbacks: InteractionCallbacks,
   ) {
-    this.hotspotRoots = hotspots.map((h) => h.object);
+    // Only outermost hotspots go to the raycaster; nested ones are found by walking up from the hit mesh.
+    for (const h of hotspots) {
+      const inside = hotspots.some((other) => other !== h && isDescendant(other.object, h.object));
+      if (inside) this.nests.add(h);
+      if (!hotspots.some((other) => other !== h && isDescendant(h.object, other.object))) {
+        this.hotspotRoots.push(h.object);
+      }
+    }
 
     canvas.addEventListener("pointermove", this.onPointerMove);
     canvas.addEventListener("pointerdown", this.onPointerDown);
@@ -233,18 +250,33 @@ export class Interaction {
     if (hotspot) this.callbacks.onAction(hotspot.action);
   };
 
+  /** True if this hotspot has been "used" (already at its destination). */
+  private spent(hotspot: Hotspot): boolean {
+    return (
+      (this.screensLive && hotspot.action.type === "focus-desk") ||
+      (!this.orbitView && hotspot.action.type === "focus-pit")
+    );
+  }
+
   /**
    * The hotspot under the pointer right now, with the point it was struck at so
    * the label has somewhere to sit. Assumes the raycaster is already aimed.
    */
   private pickHotspot(): { hotspot: Hotspot | null; point: THREE.Vector3 | null } {
-    const hit = this.raycaster.intersectObjects(this.hotspotRoots, true)[0];
-    const found = hit ? this.findHotspot(hit.object) : null;
-    // Him, the desk and the monitors all only mean "take me in". Once you are
-    // in, they stop responding entirely rather than offering to fly you
-    // somewhere you already are.
-    const hotspot = found && this.screensLive && found.action.type === "focus-desk" ? null : found;
-    return { hotspot, point: hit?.point ?? null };
+    const hits = this.raycaster.intersectObjects(this.hotspotRoots, true);
+    // A spent target ends the ray unless it has nested targets inside it.
+    let within: THREE.Object3D | null = null;
+
+    for (const hit of hits) {
+      const found = this.findHotspot(hit.object);
+      if (!found) continue;
+      if (within && found.object !== within && !isDescendant(found.object, within)) break;
+      if (!this.spent(found)) return { hotspot: found, point: hit.point };
+      // Non-nesting spent target: end of ray.
+      if (!this.nests.has(found)) break;
+      within ??= found.object;
+    }
+    return { hotspot: null, point: null };
   }
 
   update() {

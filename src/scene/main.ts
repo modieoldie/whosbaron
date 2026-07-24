@@ -16,12 +16,13 @@ import { OutputPass } from "three/examples/jsm/postprocessing/OutputPass.js";
 
 import { buildRoom, ROOM_CENTER_Z } from "./room";
 import { buildDesk, MONITOR_X, SCREEN_W, SCREEN_Y, SCREEN_Z } from "./desk";
-import { buildLounge } from "./lounge";
+import { buildLounge, PIT } from "./lounge";
 import { buildProps } from "./props";
 import { buildFigure } from "./figure";
 import { buildCat } from "./cat";
 import { buildSunbeam } from "./sunbeam";
 import { buildDust } from "./dust";
+import { buildEmbers } from "./embers";
 import { ProjectsScreen, AboutScreen, ConwayScreen, PhoneScreen } from "./screens";
 import { ScreenGlow } from "./glow";
 import { Interaction } from "./interaction";
@@ -78,6 +79,37 @@ const DESK_SPAN = MONITOR_X * 2 + SCREEN_W + 0.42;
 // the camera to be.
 const DESK_MIN_DIST = 1.98;
 
+// Pit view: looking down into the fire. Square framing, no aspect re-fit needed.
+const PIT_TARGET = new THREE.Vector3(PIT.x, -0.2, PIT.z);
+const PIT_VIEW = {
+  position: new THREE.Vector3(PIT.x, 2.5, PIT.z - 3.15),
+  target: PIT_TARGET,
+};
+
+/** Per-view orbit limits. The pit needs tighter bounds to keep the camera above the well. */
+const ORBIT_LIMITS = {
+  minDistance: 1.9,
+  maxDistance: 9,
+  minPolarAngle: 0.15,
+  maxPolarAngle: 1.5, // stop just above the floor plane
+};
+const PIT_LIMITS = {
+  minDistance: 1.6,
+  maxDistance: 5,
+  minPolarAngle: 0.2,
+  // Roughly 68°: at the closest hold this still keeps the camera above the
+  // surrounding floor, so you look down into the well rather than through it.
+  maxPolarAngle: 1.19,
+};
+
+// Card shown on arriving in the pit.
+const PIT_CARD: CardContent = {
+  eyebrow: "Off the clock",
+  title: "The conversation pit",
+  body:
+    "This is the half of the room that isn't work — where the conversation moves once the monitors go dark.",
+};
+
 // A phone held upright, where the desk view's framing gives out (see
 // `screenfocus.ts`). Landscape phones clear this comfortably and get the desk
 // view exactly as a desktop does.
@@ -89,7 +121,7 @@ function narrowViewport() {
   return COARSE_POINTER && window.innerWidth / window.innerHeight < NARROW_ASPECT;
 }
 
-type ViewName = "orbit" | "desk" | "screen";
+type ViewName = "orbit" | "desk" | "screen" | "pit";
 
 /**
  * The standing line at the foot of the screen. It changes with the view because
@@ -105,11 +137,13 @@ const HINTS: Record<ViewName, string> = {
   orbit: "Drag to look around · Click the desk",
   desk: "Left screen — projects · Right screen — about me & contact",
   screen: "Pinch to zoom · Drag to move around the screen",
+  pit: "Drag to look around · Click the fire to stoke it",
 };
 
 const TOUCH_HINTS: Partial<Record<ViewName, string>> = {
   orbit: "Swipe to look around · Tap the desk",
   desk: "Left screen — projects · Right screen — about me & contact",
+  pit: "Swipe to look around · Tap the fire to stoke it",
 };
 
 // How long to wait on the Google Fonts request before painting the monitors
@@ -203,10 +237,7 @@ export async function boot() {
   controls.enableDamping = true;
   controls.dampingFactor = 0.06;
   controls.enablePan = false;
-  controls.minDistance = 1.9;
-  controls.maxDistance = 9;
-  controls.minPolarAngle = 0.15;
-  controls.maxPolarAngle = 1.5; // stop just above the floor plane
+  Object.assign(controls, ORBIT_LIMITS);
   // No walls, so no arc to clamp: the room is open all the way round and you
   // can swing to the front of the desk and look back at him.
   controls.rotateSpeed = 0.6;
@@ -233,6 +264,9 @@ export async function boot() {
   const sunbeam = buildSunbeam(scene);
   const dust = buildDust(scene);
   dust.setPixelRatio(quality.pixelRatio);
+  // The pit fire's own motes, rising where the dust falls.
+  const embers = buildEmbers(scene);
+  embers.setPixelRatio(quality.pixelRatio);
 
   // The monitors' spill never sits still: it breathes a few percent and takes
   // its cast from whatever the panel is showing.
@@ -256,6 +290,10 @@ export async function boot() {
     { object: desk.deskTop, id: "desk", label: "Pull up to the desk", action: { type: "focus-desk", screen: 0 } },
     { object: desk.projectsScreen, id: "screen-left", label: "Projects — click to read", action: { type: "focus-desk", screen: 0 } },
     { object: desk.aboutScreen, id: "screen-right", label: "About me & contact", action: { type: "focus-desk", screen: 1 } },
+    { object: lounge.pit.object, id: "pit", label: "Step down into the pit", highlight: lounge.pit.highlight, action: { type: "focus-pit" } },
+    // Nested in pit; only reachable from within the well.
+    { object: lounge.fire.object, id: "fire", label: "Stoke the fire", highlight: lounge.fire.highlight, action: { type: "stoke-fire" } },
+    { object: cat.group, id: "cat", label: "Pet the cat", highlight: [], action: { type: "poke-cat" } },
   ];
 
   const hotspots = [...props.hotspots, ...focusHotspots];
@@ -317,7 +355,13 @@ export async function boot() {
     view = next;
     if (next === "screen") screenFocus.focus(screen);
     const destination =
-      next === "desk" ? DESK_VIEW : next === "screen" ? screenFocus.view : ORBIT_VIEW;
+      next === "desk"
+        ? DESK_VIEW
+        : next === "screen"
+          ? screenFocus.view
+          : next === "pit"
+            ? PIT_VIEW
+            : ORBIT_VIEW;
 
     tween = {
       fromPos: camera.position.clone(),
@@ -370,7 +414,13 @@ export async function boot() {
   function finishTween() {
     interaction.enabled = true;
     if (view === "orbit") {
+      Object.assign(controls, ORBIT_LIMITS);
       controls.enabled = true;
+    } else if (view === "pit") {
+      // Hand back controls with pit-specific limits.
+      Object.assign(controls, PIT_LIMITS);
+      controls.enabled = true;
+      openCard(PIT_CARD);
     } else {
       interaction.screensLive = true;
     }
@@ -419,6 +469,15 @@ export async function boot() {
     switch (action.type) {
       case "focus-desk":
         goTo(narrowViewport() ? "screen" : "desk", action.screen ?? 0);
+        break;
+      case "focus-pit":
+        goTo("pit");
+        break;
+      case "stoke-fire":
+        lounge.stoke();
+        break;
+      case "poke-cat":
+        cat.poke();
         break;
       case "card":
         openCard(action.card);
@@ -556,7 +615,12 @@ export async function boot() {
     glow.update(elapsed, dt);
     sunbeam.update(elapsed);
     dust.update(elapsed);
+    // Dust brightness tracks the sunbeam.
+    dust.setSunlight(sunbeam.brightness);
     lounge.update(elapsed);
+    // Read after fire update so stoke syncs with embers.
+    embers.setBoost(lounge.fireBoost);
+    embers.update(elapsed);
 
     // Driven every frame even while he is dissolved out: the idle is built from
     // continuous sines, and freezing it would mean he snaps to a new pose the
@@ -592,6 +656,9 @@ export async function boot() {
     } else {
       controls.update();
     }
+
+    // Pit hotspot only active in orbit view.
+    interaction.orbitView = view === "orbit" && !tween;
 
     // Dust rides the figure's curve: both belong to the room, and both are in
     // the way once the camera is at the monitors.

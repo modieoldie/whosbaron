@@ -8,6 +8,12 @@ export type HotspotAction =
    * uses it to decide which one to open on.
    */
   | { type: "focus-desk"; screen?: 0 | 1 }
+  /** Take the camera down into the conversation pit. */
+  | { type: "focus-pit" }
+  /** Feed the fire: the flames jump and the firelight flares, then both decay. */
+  | { type: "stoke-fire" }
+  /** Stir the sleeping cat: no camera move, just a reaction. */
+  | { type: "poke-cat" }
   | { type: "card"; card: CardContent }
   | { type: "projects" };
 

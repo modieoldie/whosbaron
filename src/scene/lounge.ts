@@ -53,6 +53,16 @@ const STAIR_HALF = 0.55;
 /** Shared with `room.ts`, which needs the footprint to open the floor over it. */
 export const PIT = { x: PIT_X, z: PIT_Z, width: PIT_W, depth: PIT_D } as const;
 
+/** Radius of the stone ring the fire sits in, at the centre of the well. */
+const BASIN_R = 0.6;
+/**
+ * The fire, in world space: the top of the log line at the centre of the well,
+ * and how wide the bed of logs is under it. `embers.ts` lifts its column off
+ * these, the way `dust.ts` reads the sunbeam's line off `sunbeam.ts`.
+ */
+export const FIRE_ORIGIN = new THREE.Vector3(PIT_X, -PIT_DEPTH + 0.22, PIT_Z);
+export const FIRE_BED_RADIUS = BASIN_R - 0.18;
+
 /* -------------------------------- the rug -------------------------------- */
 
 /** Sized to frame the desk and chair it now lies under. */
@@ -579,7 +589,19 @@ function buildBookStack(count: number, seed: number): THREE.Group {
  *
  * Returns the group and a per-frame `update` for the fire's flicker.
  */
-function buildPit(): { group: THREE.Group; update: (t: number) => void } {
+function buildPit(): {
+  group: THREE.Group;
+  update: (t: number) => void;
+  /** Cushions the hotspot lights on hover. */
+  highlight: THREE.Mesh[];
+  /** The fire as its own clickable target, nested inside the pit's. */
+  fire: THREE.Object3D;
+  /** Stone the hover lift lands on, since the flames have no emissive to raise. */
+  fireHighlight: THREE.Mesh[];
+  stoke: () => void;
+  /** How hard the fire is flaring right now, 0–1. Read by `embers.ts`. */
+  boost: () => number;
+} {
   const pit = new THREE.Group();
 
   const structure = new THREE.MeshStandardMaterial({
@@ -604,6 +626,9 @@ function buildPit(): { group: THREE.Group; update: (t: number) => void } {
   const blockCY = -(PIT_DEPTH + SEAT_DROP) / 2;
   const seatY = -SEAT_DROP + 0.08;
   const backH = 0.34;
+
+  // The wool cushions, gathered so the pit hotspot can light them on hover.
+  const seatMeshes: THREE.Mesh[] = [];
 
   /* ------------------------------ the bench ------------------------------ */
 
@@ -650,6 +675,7 @@ function buildPit(): { group: THREE.Group; update: (t: number) => void } {
       if (x) seat.position.set(sign * (PIT_W / 2 - SEAT_DEPTH / 2), seatY, offset);
       else seat.position.set(offset, seatY, sign * (PIT_D / 2 - SEAT_DEPTH / 2));
       pit.add(seat);
+      seatMeshes.push(seat);
     };
     const addBack = (len: number, offset: number) => {
       const back = new THREE.Mesh(
@@ -659,6 +685,7 @@ function buildPit(): { group: THREE.Group; update: (t: number) => void } {
       if (x) back.position.set(sign * (PIT_W / 2 - WALL_T - backT / 2), backCenter, offset);
       else back.position.set(offset, backCenter, sign * (PIT_D / 2 - WALL_T - backT / 2));
       pit.add(back);
+      seatMeshes.push(back);
     };
 
     if (!stairSide) {
@@ -728,8 +755,16 @@ function buildPit(): { group: THREE.Group; update: (t: number) => void } {
 
   // A stone ring at the centre of the well, a bed of embers, crossed logs, and
   // a cluster of additive flame cones that flicker in `update`.
+  //
+  // All of it goes in its own group, because the fire is a hotspot in its own
+  // right: the pit as a whole means "take me down there", but once you are down
+  // there the fire means "stoke it". Nesting one hotspot inside the other is how
+  // the same click means different things from different distances.
+  const fire = new THREE.Group();
+  pit.add(fire);
+
   const fireY = -PIT_DEPTH + 0.02;
-  const basinR = 0.6;
+  const basinR = BASIN_R;
   const stone = new THREE.MeshStandardMaterial({ color: 0x39332d, roughness: 0.95 });
 
   const basin = new THREE.Mesh(
@@ -737,14 +772,14 @@ function buildPit(): { group: THREE.Group; update: (t: number) => void } {
     stone,
   );
   basin.position.y = fireY + 0.1;
-  pit.add(basin);
+  fire.add(basin);
 
   const bowl = new THREE.Mesh(
     new THREE.CylinderGeometry(basinR - 0.07, basinR * 0.55, 0.16, RADIAL),
     new THREE.MeshStandardMaterial({ color: 0x120c08, roughness: 1 }),
   );
   bowl.position.y = fireY + 0.13;
-  pit.add(bowl);
+  fire.add(bowl);
 
   const rimRing = new THREE.Mesh(
     new THREE.TorusGeometry(basinR, 0.045, RINGS / 2, RADIAL),
@@ -752,7 +787,7 @@ function buildPit(): { group: THREE.Group; update: (t: number) => void } {
   );
   rimRing.rotation.x = Math.PI / 2;
   rimRing.position.y = fireY + 0.2;
-  pit.add(rimRing);
+  fire.add(rimRing);
 
   // Glowing ember bed, just below the log line.
   const embers = new THREE.Mesh(
@@ -761,7 +796,7 @@ function buildPit(): { group: THREE.Group; update: (t: number) => void } {
   );
   embers.rotation.x = -Math.PI / 2;
   embers.position.y = fireY + 0.16;
-  pit.add(embers);
+  fire.add(embers);
 
   // Crossed logs.
   const logMat = new THREE.MeshStandardMaterial({ color: 0x3a2414, roughness: 0.85 });
@@ -771,7 +806,7 @@ function buildPit(): { group: THREE.Group; update: (t: number) => void } {
     log.rotation.z = Math.PI / 2;
     log.rotation.y = a;
     log.position.set(0, fireY + 0.15 + (i % 2) * 0.05, 0);
-    pit.add(log);
+    fire.add(log);
   }
 
   // Flames: two shells each, an orange outer and a brighter inner, additive so
@@ -800,12 +835,23 @@ function buildPit(): { group: THREE.Group; update: (t: number) => void } {
     );
     flame.position.set(Math.cos(a) * r, fireY + 0.18 + h / 2, Math.sin(a) * r);
     flames.push({ mesh: flame, baseY: h, phase: i * 1.4, speed: 5 + (i % 3) });
-    pit.add(flame);
+    fire.add(flame);
   }
 
   const fireLight = new THREE.PointLight(0xff7a2a, 3.2, 4.5, 2);
   fireLight.position.set(0, fireY + 0.55, 0);
-  pit.add(fireLight);
+  fire.add(fireLight);
+  // Fire colour shifts from warm to white-gold during stoke.
+  const FIRE_REST = new THREE.Color(0xff7a2a);
+  const FIRE_FLARE = new THREE.Color(0xffc070);
+
+  // Invisible pick target over the flames. Kept below the pit's own pick box so the pit answers first from the room view.
+  const firePick = new THREE.Mesh(
+    new THREE.CylinderGeometry(basinR + 0.05, basinR + 0.05, 0.72, 12),
+    new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false }),
+  );
+  firePick.position.y = fireY + 0.36;
+  fire.add(firePick);
 
   /* ------------------------------ the props ------------------------------ */
 
@@ -906,16 +952,66 @@ function buildPit(): { group: THREE.Group; update: (t: number) => void } {
   lamp.position.set(0, 1.7, 0);
   pit.add(lamp);
 
+  /* ------------------------------- picking ------------------------------- */
+
+  // Invisible box filling the well opening for the raycaster. Also lids the fire target so the pit answers first from orbit view.
+  const pick = new THREE.Mesh(
+    new THREE.BoxGeometry(PIT_W, 0.95, PIT_D),
+    new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false }),
+  );
+  pick.position.y = -0.35;
+  pit.add(pick);
+
+  /** Stoke envelope: fast attack (0.18s), slow squared decay (2.6s). */
+  const STOKE_ATTACK = 0.18;
+  const STOKE_DECAY = 2.6;
+  /** When the current stoke began, or -1 at rest. */
+  let stokeAt = -1;
+  let boost = 0;
+  // Cached for `stoke` to timestamp the flare start.
+  let lastT = 0;
+  /** Integrated flame clock; runs faster during stoke without phase jumps. */
+  let flicker = 0;
+
   const update = (t: number) => {
-    for (const f of flames) {
-      const s = 1 + Math.sin(t * f.speed + f.phase) * 0.22;
-      f.mesh.scale.y = s;
-      f.mesh.position.y = fireY + 0.18 + (f.baseY * s) / 2;
-      (f.mesh.material as THREE.MeshBasicMaterial).opacity =
-        0.55 + 0.35 * (0.5 + 0.5 * Math.sin(t * f.speed * 1.3 + f.phase));
+    const dt = Math.max(t - lastT, 0);
+    lastT = t;
+
+    if (stokeAt >= 0) {
+      const s = t - stokeAt;
+      if (s > STOKE_ATTACK + STOKE_DECAY) {
+        stokeAt = -1;
+        boost = 0;
+      } else {
+        boost =
+          s < STOKE_ATTACK
+            ? s / STOKE_ATTACK
+            : Math.pow(1 - (s - STOKE_ATTACK) / STOKE_DECAY, 2);
+      }
     }
-    fireLight.intensity = 2.9 + Math.sin(t * 9) * 0.5 + Math.sin(t * 15.3) * 0.3;
-    (embers.material as THREE.MeshBasicMaterial).opacity = 0.85 + 0.15 * Math.sin(t * 6);
+
+    flicker += dt * (1 + boost * 1.4);
+
+    for (const f of flames) {
+      // Scale up height and width during stoke.
+      const jump = 1 + boost * 0.95;
+      const s = (1 + Math.sin(flicker * f.speed + f.phase) * 0.22) * jump;
+      f.mesh.scale.set(1 + boost * 0.3, s, 1 + boost * 0.3);
+      f.mesh.position.y = fireY + 0.18 + (f.baseY * s) / 2;
+      (f.mesh.material as THREE.MeshBasicMaterial).opacity = Math.min(
+        1,
+        0.55 + 0.35 * (0.5 + 0.5 * Math.sin(flicker * f.speed * 1.3 + f.phase)) + boost * 0.3,
+      );
+    }
+    // Firelight flare reaches the whole well during stoke.
+    fireLight.intensity =
+      2.9 + Math.sin(flicker * 9) * 0.5 + Math.sin(flicker * 15.3) * 0.3 + boost * 7.5;
+    fireLight.distance = 4.5 + boost * 2.2;
+    fireLight.color.copy(FIRE_REST).lerp(FIRE_FLARE, boost);
+    (embers.material as THREE.MeshBasicMaterial).opacity = Math.min(
+      1,
+      0.85 + 0.15 * Math.sin(flicker * 6) + boost * 0.2,
+    );
 
     for (const p of steam) {
       // A looping rise: each puff climbs 0.26m, swelling as it goes and fading
@@ -931,7 +1027,18 @@ function buildPit(): { group: THREE.Group; update: (t: number) => void } {
     }
   };
 
-  return { group: pit, update };
+  return {
+    group: pit,
+    update,
+    highlight: seatMeshes,
+    fire,
+    fireHighlight: [basin, rimRing],
+    // Retrigger from the top on every click.
+    stoke: () => {
+      stokeAt = lastT;
+    },
+    boost: () => boost,
+  };
 }
 
 /* -------------------------------- assembly ------------------------------- */
@@ -939,6 +1046,14 @@ function buildPit(): { group: THREE.Group; update: (t: number) => void } {
 export interface Lounge {
   /** Frame loop; drives the fire's flicker. */
   update(elapsed: number): void;
+  /** Pit hotspot: object for raycasting, cushions for hover highlight. */
+  pit: { object: THREE.Object3D; highlight: THREE.Mesh[] };
+  /** Fire hotspot, nested inside the pit. Only reachable from within the well. */
+  fire: { object: THREE.Object3D; highlight: THREE.Mesh[] };
+  /** Jump the flames and flare the firelight, then let both decay. */
+  stoke(): void;
+  /** Stoke flare intensity, 0–1. Read by embers after `update`. */
+  readonly fireBoost: number;
 }
 
 /**
@@ -954,5 +1069,13 @@ export function buildLounge(scene: THREE.Scene, rugCenterZ: number): Lounge {
   pit.group.position.set(PIT.x, 0, PIT.z);
   scene.add(pit.group);
 
-  return { update: pit.update };
+  return {
+    update: pit.update,
+    pit: { object: pit.group, highlight: pit.highlight },
+    fire: { object: pit.fire, highlight: pit.fireHighlight },
+    stoke: pit.stoke,
+    get fireBoost() {
+      return pit.boost();
+    },
+  };
 }
