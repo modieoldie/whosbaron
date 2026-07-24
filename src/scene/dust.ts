@@ -1,23 +1,19 @@
 /**
- * Dust hanging in the air over the desk, so the volume between the camera and
- * the desk stops reading as empty.
- *
- * Deliberately unattached to the sunbeam, and normally blended rather than
- * additive: additive motes turn into sparks and the bloom pass finds them.
- *
- * All motion is in the vertex shader off a per-mote seed: one draw call, no
- * CPU work per frame.
+ * Dust motes over the desk. Motes catch the sunbeam (faked in the shader from
+ * the beam's line and brightness). Normal blending, not additive. All motion
+ * and lighting in the vertex shader — one draw call, no CPU work per frame.
  */
 
 import * as THREE from "three";
 import { DESK_CENTER_Z } from "./desk";
+import { SUN_ORIGIN, SUN_DIR, SUN_BEAM_RADIUS, SUN_COLOR } from "./sunbeam";
 
-/** Few enough that you notice them only once. */
-const COUNT = 90;
+/** Few enough that you notice them only once; scaled up with the volume. */
+const COUNT = 130;
 
-/** The box the dust lives in: over the desktop, out to about the chair. */
-const CENTER = new THREE.Vector3(0, 1.05, DESK_CENTER_Z + 0.45);
-const SIZE = new THREE.Vector3(2.7, 1.5, 1.6);
+/** Volume the dust occupies. Triangular sampling clusters motes toward the centre. */
+const CENTER = new THREE.Vector3(0, 1.15, DESK_CENTER_Z + 0.55);
+const SIZE = new THREE.Vector3(5.4, 2.4, 3.8);
 
 /** Cool near-white, a touch under the room's light so it never pops. */
 const COLOR = 0x9aa0ab;
@@ -33,6 +29,11 @@ export interface Dust {
    * the box, where motes read as specks on the glass, so it fades to 0.
    */
   setPresence(k: number): void;
+  /**
+   * The sunbeam's current brightness, ~1, so the whole cloud brightens and dims
+   * with the light the motes are supposedly catching.
+   */
+  setSunlight(brightness: number): void;
 }
 
 export function buildDust(scene: THREE.Scene): Dust {
@@ -41,15 +42,19 @@ export function buildDust(scene: THREE.Scene): Dust {
   const speed = new Float32Array(COUNT);
   const size = new Float32Array(COUNT);
 
+  // Triangular sampling biases placement toward centre.
+  const centred = () => (Math.random() + Math.random()) * 0.5;
+
   for (let i = 0; i < COUNT; i++) {
-    seed[i * 3] = Math.random(); // x across the box
-    seed[i * 3 + 1] = Math.random(); // z through the box
+    seed[i * 3] = centred(); // x across the box, clustered mid
+    seed[i * 3 + 1] = centred(); // z through the box, clustered mid
     seed[i * 3 + 2] = Math.random(); // drift phase
     phase[i] = Math.random();
     // Two to six minutes to sink the box. No two rates match, or the cloud
     // reads as one scrolling sheet.
     speed[i] = 0.003 + Math.random() * 0.006;
-    size[i] = 0.6 + Math.random() * 1.1;
+    // Bias toward smaller motes so the largest don't dominate in shade.
+    size[i] = 0.6 + Math.pow(Math.random(), 1.6) * 0.95;
   }
 
   const geometry = new THREE.BufferGeometry();
@@ -72,6 +77,12 @@ export function buildDust(scene: THREE.Scene): Dust {
       uSize: { value: SIZE.clone() },
       uOpacity: { value: OPACITY },
       uScale: { value: 190 },
+      // Sunbeam line and radius for per-mote sun-catching.
+      uSunOrigin: { value: SUN_ORIGIN.clone() },
+      uSunDir: { value: SUN_DIR.clone() },
+      uSunRadius: { value: SUN_BEAM_RADIUS },
+      uSunColor: { value: new THREE.Color(SUN_COLOR) },
+      uSunlight: { value: 1 },
     },
     vertexShader: /* glsl */ `
       attribute vec3 aSeed;
@@ -83,8 +94,13 @@ export function buildDust(scene: THREE.Scene): Dust {
       uniform vec3 uCenter;
       uniform vec3 uSize;
       uniform float uScale;
+      uniform vec3 uSunOrigin;
+      uniform vec3 uSunDir;
+      uniform float uSunRadius;
+      uniform float uSunlight;
 
       varying float vFade;
+      varying float vLit;
 
       void main() {
         // Sinking, wrapped: bottom of the box reappears at the top. The end
@@ -97,16 +113,26 @@ export function buildDust(scene: THREE.Scene): Dust {
           (aSeed.y - 0.5) * uSize.z
         );
 
-        // Air currents, just enough that the fall is not a straight line.
+        // Per-mote air-current wander; layered frequencies prevent sheet effect.
         float w = aSeed.z * 6.2831853;
-        p.x += sin(uTime * 0.14 + w) * 0.06;
-        p.z += cos(uTime * 0.11 + w) * 0.06;
-        p.y += sin(uTime * 0.09 + w * 2.0) * 0.025;
+        p.x += sin(uTime * 0.14 + w) * 0.18 + cos(uTime * 0.31 + w * 1.7) * 0.07;
+        p.z += cos(uTime * 0.11 + w) * 0.18 + sin(uTime * 0.27 + w * 2.3) * 0.07;
+        p.y += sin(uTime * 0.09 + w * 2.0) * 0.06;
 
-        // Fade at the walls of the box, or motes pop in and out of existence:
-        // top and bottom for the wrap, sides for the edges.
-        vFade = smoothstep(0.0, 0.16, t) * smoothstep(1.0, 0.84, t);
-        vFade *= smoothstep(0.0, 0.2, aSeed.x) * smoothstep(1.0, 0.8, aSeed.x);
+        // Vertical fade covers the wrap seam where the bottom reappears at top.
+        vFade = smoothstep(0.0, 0.22, t) * smoothstep(1.0, 0.78, t);
+        // Radial falloff gives a soft disc cross-section, no box edges.
+        vec2 off = (aSeed.xy - 0.5) * 2.0; // -1..1 across the volume
+        float r = length(off);
+        vFade *= smoothstep(1.1, 0.35, r);
+
+        // Sun-catching: perpendicular distance to beam centre line
+        // determines brightness. Rides uSunlight to breathe with the beam.
+        vec3 rel = p - uSunOrigin;
+        float along = dot(rel, uSunDir);
+        float perp = length(rel - along * uSunDir);
+        vLit = smoothstep(uSunRadius, uSunRadius * 0.35, perp);
+        vFade *= (0.45 + 1.7 * vLit) * uSunlight;
 
         vec4 mv = modelViewMatrix * vec4(p, 1.0);
         gl_PointSize = aSize * uScale / max(-mv.z, 0.001);
@@ -115,16 +141,20 @@ export function buildDust(scene: THREE.Scene): Dust {
     `,
     fragmentShader: /* glsl */ `
       uniform vec3 uColor;
+      uniform vec3 uSunColor;
       uniform float uOpacity;
 
       varying float vFade;
+      varying float vLit;
 
       void main() {
         // Round and soft-edged; square motes read as noise.
         float d = length(gl_PointCoord - 0.5) * 2.0;
         float a = pow(1.0 - clamp(d, 0.0, 1.0), 2.0) * vFade * uOpacity;
         if (a <= 0.002) discard;
-        gl_FragColor = vec4(uColor, a);
+        // Warm toward sun colour in the shaft, cool near-white in shade.
+        vec3 color = mix(uColor, uSunColor, vLit * 0.8);
+        gl_FragColor = vec4(color, a);
       }
     `,
   });
@@ -147,6 +177,9 @@ export function buildDust(scene: THREE.Scene): Dust {
       material.uniforms.uOpacity!.value = OPACITY * k;
       // Fully faded: skip the draw rather than discarding 90 points a frame.
       points.visible = k > 0.001;
+    },
+    setSunlight(brightness: number) {
+      material.uniforms.uSunlight!.value = brightness;
     },
   };
 }

@@ -14,32 +14,37 @@
 import * as THREE from "three";
 
 /** High and to the right, well outside anything the camera can orbit to. */
-const SUN_ORIGIN = new THREE.Vector3(4.1, 5.0, 1.9);
+export const SUN_ORIGIN = new THREE.Vector3(4.1, 5.0, 1.9);
 /** Aimed across the desktop and the figure's near shoulder. */
 const SUN_TARGET = new THREE.Vector3(0.05, 0.95, -0.78);
+/** Unit heading of the shaft, from the source toward the target. */
+export const SUN_DIR = new THREE.Vector3().subVectors(SUN_TARGET, SUN_ORIGIN).normalize();
 
-const SUN_COLOR = 0xffd9a3;
+export const SUN_COLOR = 0xffd9a3;
 
-/** Half-widths of the shaft at the source and where it runs out. */
-const RADIUS_TOP = 0.62;
-const RADIUS_BOTTOM = 1.15;
+/** Half-widths at source and end. Broad enough to cover the whole rug, desk and chair. */
+const RADIUS_TOP = 0.82;
+const RADIUS_BOTTOM = 1.7;
+/** Dust sun-catching radius, slightly past the visible shell for a soft edge. */
+export const SUN_BEAM_RADIUS = RADIUS_BOTTOM * 1.15;
 /** How far past the target the shaft carries before it is cut off underground. */
 const OVERRUN = 1.9;
 
 export interface Sunbeam {
   /** Frame loop; the shaft breathes very slightly. */
   update(elapsed: number): void;
+  /** Current beam brightness (~1) as it breathes. Read by dust for sun-catching. */
+  brightness: number;
 }
 
 export function buildSunbeam(scene: THREE.Scene): Sunbeam {
-  const direction = new THREE.Vector3().subVectors(SUN_TARGET, SUN_ORIGIN).normalize();
+  const direction = SUN_DIR;
   const reach = SUN_ORIGIN.distanceTo(SUN_TARGET) + OVERRUN;
 
   /* ----------------------------- the light ---------------------------- */
 
-  // Narrow, soft-edged, and dimmer than the key: an accent falling across the
-  // scene, not the thing lighting it.
-  const spot = new THREE.SpotLight(SUN_COLOR, 9, 12, 0.3, 0.85, 1.6);
+  // Wide, soft wash — an accent, not the key light.
+  const spot = new THREE.SpotLight(SUN_COLOR, 8.5, 14, 0.52, 0.55, 1.5);
   spot.position.copy(SUN_ORIGIN);
   spot.target.position.copy(SUN_TARGET);
   scene.add(spot);
@@ -113,7 +118,7 @@ export function buildSunbeam(scene: THREE.Scene): Sunbeam {
   // Where the shaft crosses the floor. Without it the beam stops in mid-air.
   const hit = SUN_ORIGIN.clone().addScaledVector(direction, -SUN_ORIGIN.y / direction.y);
   const pool = new THREE.Mesh(
-    new THREE.PlaneGeometry(3.4, 3.4),
+    new THREE.PlaneGeometry(4.7, 4.7),
     new THREE.ShaderMaterial({
       transparent: true,
       depthWrite: false,
@@ -132,7 +137,9 @@ export function buildSunbeam(scene: THREE.Scene): Sunbeam {
         varying vec2 vUv;
         void main() {
           float d = length(vUv - 0.5) * 2.0;
-          float a = pow(1.0 - clamp(d, 0.0, 1.0), 2.4) * 0.13;
+          // Gentler falloff than a tight pool: the glow reaches out toward the
+          // edges of the rug instead of stopping short of the desk.
+          float a = pow(1.0 - clamp(d, 0.0, 1.0), 1.9) * 0.12;
           gl_FragColor = vec4(uColor * a, a);
         }
       `,
@@ -152,12 +159,16 @@ export function buildSunbeam(scene: THREE.Scene): Sunbeam {
   const baseShaft = material.uniforms.uStrength!.value as number;
   const baseSpot = spot.intensity;
 
-  return {
+  const beam: Sunbeam = {
+    brightness: 1,
     update(elapsed: number) {
       // Slow and shallow: air moving, not a flicker.
       const b = Math.sin(elapsed * 0.21) * 0.5 + Math.sin(elapsed * 0.37) * 0.5;
       material.uniforms.uStrength!.value = baseShaft * (1 + b * 0.09);
       spot.intensity = baseSpot * (1 + b * 0.05);
+      // Deeper swing than the shaft so motes visibly track the light.
+      beam.brightness = 1 + b * 0.14;
     },
   };
+  return beam;
 }
