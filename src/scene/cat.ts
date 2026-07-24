@@ -5,8 +5,14 @@ import { DESK_TOP_Y, DESK_WIDTH } from "./desk";
 
 export interface CatRig {
   group: THREE.Group;
-  /** Breathing, the only motion she has; she is asleep. */
+  /** Breathing and, when poked, a brief stir. */
   update(elapsed: number): void;
+  /**
+   * Poke her: she stirs in her sleep — a stretch, a chin lift, an ear swivel and
+   * a tail flick — then settles back down. Retriggerable; a fresh poke restarts
+   * the stir from the top.
+   */
+  poke(): void;
 }
 
 type Table = readonly (readonly [number, number])[];
@@ -267,6 +273,7 @@ export function buildCat(scene: THREE.Scene): CatRig {
     head.add(lid);
   }
 
+  const ears: THREE.Mesh[] = [];
   for (const side of [-1, 1]) {
     // Dark at the base, fading up: an ear backed by the coat it grows out of.
     const shell = paint(new THREE.ConeGeometry(0.026, 0.036, RADIAL), (p) =>
@@ -277,6 +284,7 @@ export function buildCat(scene: THREE.Scene): CatRig {
     ear.position.set(side * 0.033, 0.046, -0.006);
     ear.rotation.set(-0.18, 0, side * -0.34);
     head.add(ear);
+    ears.push(ear);
 
     const inner = new THREE.Mesh(new THREE.ConeGeometry(0.016, 0.024, RADIAL), earPink);
     inner.scale.z = 0.4;
@@ -355,18 +363,50 @@ export function buildCat(scene: THREE.Scene): CatRig {
     );
   }
 
-  /* ------------------------------ breathing ------------------------------ */
+  /* --------------------------- breathing & stir --------------------------- */
+
+  // Rest angles; poke rotations reset to these each frame.
+  const HEAD_REST_X = -0.17;
+  const HEAD_REST_Z = 0.1;
+  const EAR_REST_X = -0.18;
+
+  /** How long one stir lasts, and when the current one began (-1 = at rest). */
+  const POKE_DUR = 1.5;
+  let pokeAt = -1;
+  // Cached so `poke` can timestamp the stir start.
+  let lastElapsed = 0;
 
   return {
     group,
+    poke() {
+      // Retrigger from the top on every poke.
+      pokeAt = lastElapsed;
+    },
     update(elapsed: number) {
-      // Scaled about the group origin, the desk surface, so the swell is all
-      // upward and she never lifts off it.
+      lastElapsed = elapsed;
+
+      // A single raised bump, 0 → 1 → 0 over the stir, eased at both ends.
+      let k = 0;
+      if (pokeAt >= 0) {
+        const s = elapsed - pokeAt;
+        if (s >= POKE_DUR) pokeAt = -1;
+        else k = Math.sin((s / POKE_DUR) * Math.PI);
+      }
+
+      // Breathing swell (upward only). Stir adds a forward stretch.
       const breath = Math.sin(elapsed * 0.9) * 0.5 + 0.5;
-      body.scale.set(1 + breath * 0.012, 1 + breath * 0.02, 1);
-      // The tail stirs on a slower beat than the breath.
-      tail.rotation.y = Math.sin(elapsed * 0.37) * 0.012;
-      head.position.y = HEAD.y + breath * 0.0015;
+      body.scale.set(1 + breath * 0.012, 1 + breath * 0.02, 1 + k * 0.05);
+
+      // Slow tail sway + quick flick on poke.
+      tail.rotation.y = Math.sin(elapsed * 0.37) * 0.012 + k * Math.sin(elapsed * 22) * 0.13;
+
+      head.position.y = HEAD.y + breath * 0.0015 + k * 0.018;
+      head.rotation.x = HEAD_REST_X - k * 0.42;
+      head.rotation.z = HEAD_REST_Z + k * 0.1;
+
+      // Ears swivel up on poke, near ear more than far.
+      ears[0]!.rotation.x = EAR_REST_X + k * 0.32;
+      ears[1]!.rotation.x = EAR_REST_X + k * 0.24;
     },
   };
 }
