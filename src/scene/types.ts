@@ -10,6 +10,8 @@ export type HotspotAction =
   | { type: "focus-desk"; screen?: 0 | 1 }
   /** Take the camera down into the conversation pit. */
   | { type: "focus-pit" }
+  /** Take the camera in to the drawing pad. */
+  | { type: "focus-pad" }
   /** Feed the fire: the flames jump and the firelight flares, then both decay. */
   | { type: "stoke-fire" }
   /** Stir the sleeping cat: no camera move, just a reaction. */

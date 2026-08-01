@@ -21,6 +21,7 @@ const byTitle = (title: string) => projects.find((p) => p.title === title)!;
 
 export interface PropsRig {
   hotspots: Hotspot[];
+  padScreen: THREE.Mesh;
 }
 
 export function buildProps(
@@ -324,20 +325,13 @@ export function buildProps(
   pad.add(padScreen);
   group.add(pad);
 
-  const conwayProject = byTitle("Conway's Game of Life");
   hotspots.push({
     object: pad,
     id: "pad",
-    label: "Conway's Game of Life",
+    label: "Conway's Game of Life — Zoom in & play",
     highlight: [padBody],
     action: {
-      type: "card",
-      card: {
-        eyebrow: "Project · " + conwayProject.period,
-        title: conwayProject.title,
-        body: conwayProject.blurb,
-        meta: conwayProject.stack,
-      },
+      type: "focus-pad",
     },
   });
 
@@ -450,5 +444,5 @@ export function buildProps(
     },
   });
 
-  return { hotspots };
+  return { hotspots, padScreen };
 }

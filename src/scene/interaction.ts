@@ -7,7 +7,7 @@
 import * as THREE from "three";
 import { HEX } from "./palette";
 import type { Hotspot, HotspotAction } from "./types";
-import type { ProjectsScreen, AboutScreen } from "./screens";
+import type { ProjectsScreen, AboutScreen, ConwayScreen } from "./screens";
 
 const CLICK_SLOP_PX = 6;
 const CLICK_MAX_MS = 500;
@@ -53,6 +53,7 @@ export class Interaction {
 
   /** Texture-space Y of the last drag sample on the projects pane, or null. */
   private scrollFrom: number | null = null;
+  private conwayInteracting = false;
 
   private hotspotRoots: THREE.Object3D[] = [];
   /** Hotspots with another hotspot nested somewhere inside them. */
@@ -64,6 +65,8 @@ export class Interaction {
   enabled = true;
   /** In desk view the monitors become interactive; in orbit view they don't. */
   screensLive = false;
+  /** In pad view the tablet canvas becomes interactive; in orbit/desk view it doesn't. */
+  padLive = false;
   /** True in orbit view. Navigation hotspots only respond from here. */
   orbitView = true;
 
@@ -94,6 +97,8 @@ export class Interaction {
     private projectsScreen: ProjectsScreen,
     private aboutMesh: THREE.Mesh,
     private aboutScreen: AboutScreen,
+    private padMesh: THREE.Mesh,
+    private conwayScreen: ConwayScreen,
     private label: HTMLElement,
     private callbacks: InteractionCallbacks,
   ) {
@@ -143,6 +148,20 @@ export class Interaction {
       this.dragged = true;
     }
 
+    if (this.conwayInteracting && event.buttons) {
+      const padUV = this.conwayUV();
+      if (padUV) {
+        this.conwayScreen.handleInput(padUV.x, 1 - padUV.y, true);
+      }
+    } else if (this.enabled && this.padLive) {
+      const padUV = this.conwayUV();
+      if (padUV) {
+        this.conwayScreen.setHover(padUV.x, 1 - padUV.y);
+      } else {
+        this.conwayScreen.clearHover();
+      }
+    }
+
     // Grab-scroll the detail pane. Sampling in texture space rather than screen
     // pixels means the content tracks the pointer at any camera distance.
     if (this.scrollFrom !== null && event.buttons) {
@@ -163,6 +182,14 @@ export class Interaction {
     this.downY = event.clientY;
     this.dragged = false;
 
+    const padUV = this.enabled && this.padLive ? this.conwayUV() : null;
+    if (padUV) {
+      this.conwayInteracting = true;
+      this.conwayScreen.handleInput(padUV.x, 1 - padUV.y, false);
+    } else {
+      this.conwayInteracting = false;
+    }
+
     const uv = this.enabled && this.screensLive ? this.projectsUV() : null;
     this.scrollFrom =
       uv && this.projectsScreen.isOverDetail(uv.x, uv.y) ? this.projectsScreen.toTextureY(uv.y) : null;
@@ -171,6 +198,8 @@ export class Interaction {
   private onPointerLeave = () => {
     this.pointerOnScreen = false;
     this.scrollFrom = null;
+    this.conwayInteracting = false;
+    this.conwayScreen.clearHover();
     this.projectsScreen.setHoveredLink(-1);
     this.aboutScreen.setHoveredLink(-1);
     this.clearHover();
@@ -203,12 +232,26 @@ export class Interaction {
     return this.screenUV(this.aboutMesh);
   }
 
+  private conwayUV(): THREE.Vector2 | null {
+    return this.screenUV(this.padMesh);
+  }
+
   private onPointerUp = (event: PointerEvent) => {
     this.scrollFrom = null;
     if (!this.enabled) return;
+
+    const wasConwayInteracting = this.conwayInteracting;
+    this.conwayInteracting = false;
+
     // Pick from where the finger lifted, not from wherever the pointer was last
     // seen; on touch those are the same only by accident.
     this.trackPointer(event);
+
+    if (wasConwayInteracting && this.padLive && this.conwayUV()) {
+      // Direct touch on padScreen canvas handles Conway input, bypass opening card modal
+      return;
+    }
+
     // An orbit drag that happens to end on a hotspot is not a click.
     if (this.dragged || performance.now() - this.downAt > (this.touch ? TOUCH_MAX_MS : CLICK_MAX_MS)) {
       return;
@@ -326,6 +369,7 @@ export class Interaction {
       }
     }
 
+    const padUV = this.padLive ? this.conwayUV() : null;
     const { hotspot, point } = this.pickHotspot();
 
     if (hotspot !== this.hovered) {
@@ -335,7 +379,7 @@ export class Interaction {
     }
 
     // Orbiting is off at the desk, so the grab cursor would be a lie there.
-    this.canvas.style.cursor = hotspot ? "pointer" : this.screensLive ? "default" : "grab";
+    this.canvas.style.cursor = padUV || hotspot ? "pointer" : this.screensLive ? "default" : "grab";
 
     if (hotspot && point) {
       this.positionLabel(hotspot.label, point);

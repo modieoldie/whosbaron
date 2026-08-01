@@ -859,9 +859,25 @@ function gradDate(): string {
 
 export class ConwayScreen extends CanvasScreen {
   private readonly cols = 32;
-  private readonly rows = 32;
+  private readonly rows = 24;
+  private readonly topBarHeight = 36;
+  private readonly gridTop = 36;
+  private readonly gridHeight = 240; // 36px top header + 240px grid + 44px bottom toolbar = 320px
   private grid: Uint8Array;
   private stepIn = 0;
+
+  private speedIndex = 0;
+  private readonly speeds = [
+    { label: "1x", dt: 0.22 },
+    { label: "2x", dt: 0.11 },
+    { label: "4x", dt: 0.05 },
+    { label: "0.5x", dt: 0.44 },
+  ];
+  private isPaused = false;
+  private userInteracted = false;
+  private presetIndex = 0;
+  private readonly presetNames = ["GUN", "PULSAR", "SPACESHIP", "RANDOM"];
+  private activeHoverButton: "presets" | "play" | "speed" | "reset" | "clear" | null = null;
 
   constructor() {
     super(320, 320);
@@ -869,12 +885,17 @@ export class ConwayScreen extends CanvasScreen {
     this.seed();
   }
 
-  private seed() {
+  /** Called when the user zooms into the tablet: resets to a clean slate. */
+  public onZoomIn() {
+    this.clear();
+  }
+
+  public seed() {
     this.grid.fill(0);
     for (let i = 0; i < this.grid.length; i++) {
       this.grid[i] = Math.random() > 0.78 ? 1 : 0;
     }
-    // A glider, because it is the only cellular automaton anyone recognises.
+    // A glider in the top left
     const glider = [
       [1, 0],
       [2, 1],
@@ -882,10 +903,116 @@ export class ConwayScreen extends CanvasScreen {
       [1, 2],
       [2, 2],
     ];
-    for (const [x, y] of glider) this.grid[y! * this.cols + x!] = 1;
+    for (const [x, y] of glider) {
+      if (x < this.cols && y < this.rows) {
+        this.grid[y * this.cols + x] = 1;
+      }
+    }
+    this.userInteracted = false;
+    this.isPaused = false;
+    this.invalidate();
+  }
+
+  public clear() {
+    this.grid.fill(0);
+    this.isPaused = true; // Pause on clean slate so user drawings don't immediately die
+    this.userInteracted = true;
+    this.invalidate();
+  }
+
+  public togglePause(): boolean {
+    this.isPaused = !this.isPaused;
+    this.invalidate();
+    return this.isPaused;
+  }
+
+  public getIsPaused(): boolean {
+    return this.isPaused;
+  }
+
+  public toggleSpeed(): string {
+    this.speedIndex = (this.speedIndex + 1) % this.speeds.length;
+    this.invalidate();
+    return this.speeds[this.speedIndex]!.label;
+  }
+
+  public getSpeedLabel(): string {
+    return this.speeds[this.speedIndex]!.label;
+  }
+
+  public loadNextPreset(): string {
+    this.presetIndex = (this.presetIndex + 1) % this.presetNames.length;
+    this.applyPreset(this.presetIndex);
+    this.isPaused = false;
+    this.userInteracted = true;
+    this.invalidate();
+    return this.presetNames[this.presetIndex]!;
+  }
+
+  public getPresetLabel(): string {
+    return this.presetNames[this.presetIndex]!;
+  }
+
+  public applyPreset(index: number) {
+    this.grid.fill(0);
+    const name = this.presetNames[index];
+    if (name === "GUN") {
+      // Gosper Glider Gun: continuous glider generator
+      const gun = [
+        [24,0],[22,1],[24,1],[12,2],[13,2],[20,2],[21,2],[34,2],[35,2],
+        [11,3],[15,3],[20,3],[21,3],[34,3],[35,3],[0,4],[1,4],[10,4],[16,4],[20,4],[21,4],
+        [0,5],[1,5],[10,5],[14,5],[16,5],[17,5],[22,5],[24,5],[10,6],[16,6],[24,6],
+        [11,7],[15,7],[12,8],[13,8]
+      ];
+      for (const [x, y] of gun) {
+        const gx = x! - 1;
+        const gy = y! + 2;
+        if (gx >= 0 && gx < this.cols && gy >= 0 && gy < this.rows) {
+          this.grid[gy * this.cols + gx] = 1;
+        }
+      }
+    } else if (name === "PULSAR") {
+      // Pulsar oscillator
+      const pulsarCoords = [
+        [2,0],[3,0],[4,0],[8,0],[9,0],[10,0],
+        [0,2],[5,2],[7,2],[12,2],
+        [0,3],[5,3],[7,3],[12,3],
+        [0,4],[5,4],[7,4],[12,4],
+        [2,5],[3,5],[4,5],[8,5],[9,5],[10,5],
+        [2,7],[3,7],[4,7],[8,7],[9,7],[10,7],
+        [0,8],[5,8],[7,8],[12,8],
+        [0,9],[5,9],[7,9],[12,9],
+        [0,10],[5,10],[7,10],[12,10],
+        [2,12],[3,12],[4,12],[8,12],[9,12],[10,12]
+      ];
+      for (const [x, y] of pulsarCoords) {
+        const gx = x! + 9;
+        const gy = y! + 5;
+        if (gx >= 0 && gx < this.cols && gy >= 0 && gy < this.rows) {
+          this.grid[gy * this.cols + gx] = 1;
+        }
+      }
+    } else if (name === "SPACESHIP") {
+      // Lightweight Spaceships
+      const lwss = [
+        [1,0],[4,0],[0,1],[0,2],[4,2],[0,3],[1,3],[2,3],[3,3]
+      ];
+      for (let i = 0; i < 3; i++) {
+        for (const [x, y] of lwss) {
+          const gx = x! + 2 + i * 9;
+          const gy = y! + 3 + i * 5;
+          if (gx >= 0 && gx < this.cols && gy >= 0 && gy < this.rows) {
+            this.grid[gy * this.cols + gx] = 1;
+          }
+        }
+      }
+    } else {
+      this.seed();
+    }
   }
 
   private step() {
+    if (this.isPaused) return;
     const next = new Uint8Array(this.grid.length);
     let alive = 0;
 
@@ -895,7 +1022,7 @@ export class ConwayScreen extends CanvasScreen {
         for (let dy = -1; dy <= 1; dy++) {
           for (let dx = -1; dx <= 1; dx++) {
             if (!dx && !dy) continue;
-            // Toroidal wrap: gliders leave one edge and come back the other.
+            // Toroidal wrap
             const nx = (x + dx + this.cols) % this.cols;
             const ny = (y + dy + this.rows) % this.rows;
             n += this.grid[ny * this.cols + nx]!;
@@ -909,34 +1036,217 @@ export class ConwayScreen extends CanvasScreen {
     }
 
     this.grid = next;
-    if (alive < 12) this.seed(); // Died out or froze; reseed rather than sit still.
+    // Auto-reseed only if grid has died out and user hasn't explicitly cleared/drawn
+    if (alive === 0 && !this.userInteracted) {
+      this.seed();
+    }
   }
 
   update(dt: number) {
+    if (this.isPaused) return;
     this.stepIn -= dt;
     if (this.stepIn > 0) return;
-    this.stepIn = 0.22;
+    this.stepIn = this.speeds[this.speedIndex]!.dt;
     this.step();
     this.invalidate();
   }
 
+  public reset() {
+    this.clear();
+  }
+
+  /**
+   * Handles user interaction (click, tap, drag) on normalized coordinates [0, 1].
+   */
+  public handleInput(normX: number, normY: number, isDrag = false): boolean {
+    const px = normX * this.width;
+    const py = normY * this.height;
+
+    // Top Bar (Y = 0..36)
+    if (py < this.topBarHeight) {
+      if (!isDrag && px >= 190 && px <= 312 && py >= 4 && py <= 32) {
+        this.loadNextPreset();
+        return true;
+      }
+    }
+    // Grid area (Y = 36..276)
+    else if (py < this.gridTop + this.gridHeight) {
+      const cw = this.width / this.cols;
+      const ch = this.gridHeight / this.rows;
+      const col = Math.floor(px / cw);
+      const row = Math.floor((py - this.gridTop) / ch);
+      if (col >= 0 && col < this.cols && row >= 0 && row < this.rows) {
+        const idx = row * this.cols + col;
+        if (isDrag) {
+          this.grid[idx] = 1;
+        } else {
+          this.grid[idx] = this.grid[idx] ? 0 : 1;
+        }
+        this.userInteracted = true;
+        this.invalidate();
+        return true;
+      }
+    }
+    // Bottom Toolbar (Y = 276..320)
+    else if (!isDrag) {
+      // 1. Play/Pause: X in [8, 104]
+      // 2. Speed: X in [112, 208]
+      // 3. Reset (Clean Slate): X in [216, 312]
+      if (px >= 8 && px <= 104) {
+        this.togglePause();
+        return true;
+      } else if (px >= 112 && px <= 208) {
+        this.toggleSpeed();
+        return true;
+      } else if (px >= 216 && px <= 312) {
+        this.clear();
+        return true;
+      }
+    }
+    return false;
+  }
+
+  public setHover(normX: number, normY: number) {
+    const px = normX * this.width;
+    const py = normY * this.height;
+    let newHover: "presets" | "play" | "speed" | "reset" | null = null;
+    if (py < this.topBarHeight) {
+      if (px >= 190 && px <= 312 && py >= 4 && py <= 32) newHover = "presets";
+    } else if (py >= this.gridTop + this.gridHeight) {
+      if (px >= 8 && px <= 104) newHover = "play";
+      else if (px >= 112 && px <= 208) newHover = "speed";
+      else if (px >= 216 && px <= 312) newHover = "reset";
+    }
+    if (this.activeHoverButton !== newHover) {
+      this.activeHoverButton = newHover;
+      this.invalidate();
+    }
+  }
+
+  public clearHover() {
+    if (this.activeHoverButton !== null) {
+      this.activeHoverButton = null;
+      this.invalidate();
+    }
+  }
+
   protected draw() {
     const c = this.ctx;
-    c.fillStyle = "#0d0d0f";
+    // Dark tablet screen background
+    c.fillStyle = "#0c0c11";
     c.fillRect(0, 0, this.width, this.height);
 
-    const cw = this.width / this.cols;
-    const ch = this.height / this.rows;
+    // Top Header Bar
+    c.fillStyle = "#12121a";
+    c.fillRect(0, 0, this.width, this.topBarHeight);
+    c.fillStyle = "#222230";
+    c.fillRect(0, this.topBarHeight - 1, this.width, 1);
 
+    // Title
+    c.fillStyle = "#94a3b8";
+    c.font = "600 10px system-ui, sans-serif";
+    c.textAlign = "left";
+    c.textBaseline = "middle";
+    c.fillText("GAME OF LIFE", 10, this.topBarHeight / 2);
+
+    // Top Presets Button
+    this.drawButton(
+      190,
+      5,
+      122,
+      26,
+      `PRESET: ${this.presetNames[this.presetIndex]}`,
+      this.activeHoverButton === "presets",
+      "#38bdf8",
+    );
+
+    // Grid area
+    const cw = this.width / this.cols;
+    const ch = this.gridHeight / this.rows;
+
+    // Draw subtle grid lines
+    c.strokeStyle = "rgba(255, 255, 255, 0.04)";
+    c.lineWidth = 1;
+    for (let x = 0; x <= this.width; x += cw) {
+      c.beginPath();
+      c.moveTo(x, this.gridTop);
+      c.lineTo(x, this.gridTop + this.gridHeight);
+      c.stroke();
+    }
+    for (let y = this.gridTop; y <= this.gridTop + this.gridHeight; y += ch) {
+      c.beginPath();
+      c.moveTo(0, y);
+      c.lineTo(this.width, y);
+      c.stroke();
+    }
+
+    // Draw cells
+    c.fillStyle = CSS.green;
+    let liveCellCount = 0;
     for (let y = 0; y < this.rows; y++) {
       for (let x = 0; x < this.cols; x++) {
         if (!this.grid[y * this.cols + x]) continue;
-        // Phosphor green rather than the room's brass, so the tablet reads as its
-        // own device running its own thing rather than as a third monitor.
-        c.fillStyle = CSS.green;
-        c.fillRect(x * cw + 1, y * ch + 1, cw - 2, ch - 2);
+        c.fillRect(x * cw + 1, this.gridTop + y * ch + 1, cw - 2, ch - 2);
+        liveCellCount++;
       }
     }
+
+    // Helper overlay text when board is empty and paused
+    if (liveCellCount === 0 && this.isPaused) {
+      const centerY = this.gridTop + this.gridHeight / 2;
+      c.fillStyle = "#64748b";
+      c.font = "600 11px system-ui, sans-serif";
+      c.textAlign = "center";
+      c.textBaseline = "middle";
+      c.fillText("TAP OR DRAG TO DRAW CELLS", this.width / 2, centerY - 10);
+      c.fillStyle = "#22c55e";
+      c.font = "600 10px system-ui, sans-serif";
+      c.fillText("PRESS PLAY ▶ TO START SIMULATION", this.width / 2, centerY + 10);
+    }
+
+    // Bottom toolbar
+    const barY = this.gridTop + this.gridHeight;
+    const barH = this.height - barY;
+    c.fillStyle = "#14141a";
+    c.fillRect(0, barY, this.width, barH);
+
+    // Separator border
+    c.fillStyle = "#262632";
+    c.fillRect(0, barY, this.width, 1);
+
+    // Draw 3 Control Buttons: PLAY/PAUSE, SPEED, RESET (Cleans slate)
+    const speedInfo = this.speeds[this.speedIndex]!;
+    const playText = this.isPaused ? "PLAY ▶" : "PAUSE ❚❚";
+    const playColor = this.isPaused ? "#f59e0b" : "#22c55e";
+
+    this.drawButton(8, barY + 7, 96, 30, playText, this.activeHoverButton === "play", playColor);
+    this.drawButton(112, barY + 7, 96, 30, `SPEED: ${speedInfo.label}`, this.activeHoverButton === "speed", "#38bdf8");
+    this.drawButton(216, barY + 7, 96, 30, "RESET", this.activeHoverButton === "reset");
+  }
+
+  private drawButton(
+    x: number,
+    y: number,
+    w: number,
+    h: number,
+    label: string,
+    hovered: boolean,
+    accentColor?: string,
+  ) {
+    const c = this.ctx;
+    c.fillStyle = hovered ? "#262634" : "#1b1b22";
+    c.strokeStyle = hovered ? "#4c4c60" : "#2a2a38";
+    c.lineWidth = 1;
+
+    this.roundRect(x, y, w, h, 4);
+    c.fill();
+    c.stroke();
+
+    c.fillStyle = accentColor && !hovered ? accentColor : "#e2e8f0";
+    c.font = "600 10px system-ui, sans-serif";
+    c.textAlign = "center";
+    c.textBaseline = "middle";
+    c.fillText(label, x + w / 2, y + h / 2);
   }
 }
 

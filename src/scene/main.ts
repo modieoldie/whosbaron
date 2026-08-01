@@ -15,7 +15,7 @@ import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPa
 import { OutputPass } from "three/examples/jsm/postprocessing/OutputPass.js";
 
 import { buildRoom, ROOM_CENTER_Z } from "./room";
-import { buildDesk, MONITOR_X, SCREEN_W, SCREEN_Y, SCREEN_Z } from "./desk";
+import { buildDesk, MONITOR_X, SCREEN_W, SCREEN_Y, SCREEN_Z, DESK_TOP_Y } from "./desk";
 import { buildLounge, PIT } from "./lounge";
 import { buildProps } from "./props";
 import { buildFigure } from "./figure";
@@ -28,6 +28,7 @@ import { ScreenGlow } from "./glow";
 import { Interaction } from "./interaction";
 import { ScreenFocus } from "./screenfocus";
 import { PropMarkers } from "./markers";
+import { FireAudio } from "./audio";
 import type { CardContent, HotspotAction, Hotspot } from "./types";
 import { projects } from "../data/content";
 
@@ -86,6 +87,13 @@ const PIT_VIEW = {
   target: PIT_TARGET,
 };
 
+// Tablet (Conway's Game of Life) close-up zoom view.
+const PAD_TARGET = new THREE.Vector3(0.68, DESK_TOP_Y + 0.005, -0.95);
+const PAD_VIEW = {
+  position: new THREE.Vector3(0.68, DESK_TOP_Y + 0.26, -0.73),
+  target: PAD_TARGET,
+};
+
 /** Per-view orbit limits. The pit needs tighter bounds to keep the camera above the well. */
 const ORBIT_LIMITS = {
   minDistance: 1.9,
@@ -121,7 +129,7 @@ function narrowViewport() {
   return COARSE_POINTER && window.innerWidth / window.innerHeight < NARROW_ASPECT;
 }
 
-type ViewName = "orbit" | "desk" | "screen" | "pit";
+type ViewName = "orbit" | "desk" | "screen" | "pit" | "pad";
 
 /**
  * The standing line at the foot of the screen. It changes with the view because
@@ -134,16 +142,18 @@ type ViewName = "orbit" | "desk" | "screen" | "pit";
  * single panel filling the frame, the thing worth saying is that it zooms.
  */
 const HINTS: Record<ViewName, string> = {
-  orbit: "Drag to look around · Click the desk",
+  orbit: "Drag to look around · Click the desk or tablet",
   desk: "Left screen — projects · Right screen — about me & contact",
   screen: "Pinch to zoom · Drag to move around the screen",
   pit: "Drag to look around · Click the fire to stoke it",
+  pad: "Click or tap screen to spawn cells · Use bottom buttons to change speed or reset",
 };
 
 const TOUCH_HINTS: Partial<Record<ViewName, string>> = {
-  orbit: "Swipe to look around · Tap the desk",
+  orbit: "Swipe to look around · Tap the desk or tablet",
   desk: "Left screen — projects · Right screen — about me & contact",
   pit: "Swipe to look around · Tap the fire to stoke it",
+  pad: "Tap screen to spawn cells · Use bottom buttons to change speed or reset",
 };
 
 // How long to wait on the Google Fonts request before painting the monitors
@@ -200,7 +210,10 @@ export async function boot() {
     cardMeta: document.getElementById("card-meta")!,
     cardLink: document.getElementById("card-link") as HTMLAnchorElement,
     cardClose: document.getElementById("card-close")!,
+    soundBtn: document.getElementById("sound-btn"),
   };
+
+  const fireAudio = new FireAudio();
 
   const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   const quality = detectQuality();
@@ -343,6 +356,17 @@ export async function boot() {
   let view: ViewName = "orbit";
   let tween: { fromPos: THREE.Vector3; fromTarget: THREE.Vector3; to: typeof ORBIT_VIEW; t: number; duration: number } | null = null;
   const parallax = new THREE.Vector2();
+  let lastFocusedElement: HTMLElement | null = null;
+
+  function announce(message: string) {
+    const announcer = document.getElementById("sr-announcer");
+    if (announcer) {
+      announcer.textContent = "";
+      setTimeout(() => {
+        announcer.textContent = message;
+      }, 50);
+    }
+  }
 
   /**
    * @param screen Which panel the reading view should open on. Ignored by the
@@ -353,7 +377,19 @@ export async function boot() {
     // turn, not a no-op, so the early-out has to let a screen change through.
     if (view === next && !tween && !(next === "screen" && screen !== screenFocus.screen)) return;
     view = next;
+    fireAudio.setView(next);
     if (next === "screen") screenFocus.focus(screen);
+    if (next === "pad") screens.conway.onZoomIn();
+
+    controls.enabled = false;
+    interaction.enabled = false;
+    interaction.screensLive = false;
+    interaction.padLive = false;
+    // The screens stop being hit-tested the moment the camera moves, so a link
+    // left lit under the pointer would stay lit for the whole flight out.
+    screens.projects.setHoveredLink(-1);
+    screens.about.setHoveredLink(-1);
+
     const destination =
       next === "desk"
         ? DESK_VIEW
@@ -361,7 +397,9 @@ export async function boot() {
           ? screenFocus.view
           : next === "pit"
             ? PIT_VIEW
-            : ORBIT_VIEW;
+            : next === "pad"
+              ? PAD_VIEW
+              : ORBIT_VIEW;
 
     tween = {
       fromPos: camera.position.clone(),
@@ -370,14 +408,6 @@ export async function boot() {
       t: 0,
       duration: reducedMotion ? 0.01 : 1.35,
     };
-
-    controls.enabled = false;
-    interaction.enabled = false;
-    interaction.screensLive = false;
-    // The screens stop being hit-tested the moment the camera moves, so a link
-    // left lit under the pointer would stay lit for the whole flight out.
-    screens.projects.setHoveredLink(-1);
-    screens.about.setHoveredLink(-1);
 
     dom.intro.dataset.visible = String(next === "orbit");
     dom.hintText.textContent = (COARSE_POINTER && TOUCH_HINTS[next]) || HINTS[next];
@@ -388,9 +418,20 @@ export async function boot() {
     // that shows a single monitor and so needs a way to reach the other.
     dom.screenSwitch.dataset.visible = String(next === "screen");
     dom.screenTabs.forEach((tab, i) => {
-      tab.dataset.active = String(next === "screen" && i === screen);
+      const active = next === "screen" && i === screen;
+      tab.dataset.active = String(active);
+      tab.setAttribute("aria-selected", String(active));
     });
     if (next !== "orbit") closeCard();
+
+    const viewMessages: Record<ViewName, string> = {
+      orbit: "Returned to room orbit view. You can look around or select interactive desk items.",
+      desk: "Focused on desk monitors. Left screen shows projects, right screen shows about info.",
+      screen: screen === 0 ? "Viewing Projects screen in close-up." : "Viewing About & Contact screen in close-up.",
+      pit: "Stepped down into the conversation pit.",
+      pad: "Zoomed into tablet screen displaying Conway's Game of Life. Click or tap to spawn cells.",
+    };
+    announce(viewMessages[next]);
   }
 
   /**
@@ -416,13 +457,25 @@ export async function boot() {
     if (view === "orbit") {
       Object.assign(controls, ORBIT_LIMITS);
       controls.enabled = true;
+      controls.update();
+      interaction.screensLive = false;
+      interaction.padLive = false;
     } else if (view === "pit") {
       // Hand back controls with pit-specific limits.
       Object.assign(controls, PIT_LIMITS);
       controls.enabled = true;
+      controls.update();
+      interaction.screensLive = false;
+      interaction.padLive = false;
       openCard(PIT_CARD);
+    } else if (view === "pad") {
+      controls.enabled = false;
+      interaction.screensLive = false;
+      interaction.padLive = true;
     } else {
+      controls.enabled = false;
       interaction.screensLive = true;
+      interaction.padLive = false;
     }
     tween = null;
   }
@@ -430,6 +483,9 @@ export async function boot() {
   /* ----------------------------- cards ----------------------------- */
 
   function openCard(card: CardContent) {
+    if (document.activeElement instanceof HTMLElement && document.activeElement !== dom.card) {
+      lastFocusedElement = document.activeElement;
+    }
     dom.cardEyebrow.textContent = card.eyebrow;
     dom.cardTitle.textContent = card.title;
     dom.cardBody.textContent = card.body;
@@ -459,10 +515,64 @@ export async function boot() {
     }
 
     dom.card.dataset.visible = "true";
+
+    if (card.title === "Conway's Game of Life") {
+      const controlsContainer = document.createElement("div");
+      controlsContainer.className = "mt-4 flex flex-wrap gap-2 pt-3 border-t border-white/10 w-full";
+
+      const playBtn = document.createElement("button");
+      playBtn.type = "button";
+      playBtn.className = "chip text-xs cursor-pointer hover:bg-white/20 transition-colors";
+      playBtn.textContent = screens.conway.getIsPaused() ? "Play ▶" : "Pause ❚❚";
+      playBtn.onclick = () => {
+        const paused = screens.conway.togglePause();
+        playBtn.textContent = paused ? "Play ▶" : "Pause ❚❚";
+      };
+
+      const presetBtn = document.createElement("button");
+      presetBtn.type = "button";
+      presetBtn.className = "chip text-xs cursor-pointer hover:bg-white/20 transition-colors";
+      presetBtn.textContent = `Preset: ${screens.conway.getPresetLabel()}`;
+      presetBtn.onclick = () => {
+        const preset = screens.conway.loadNextPreset();
+        presetBtn.textContent = `Preset: ${preset}`;
+        playBtn.textContent = "Pause ❚❚";
+      };
+
+      const speedBtn = document.createElement("button");
+      speedBtn.type = "button";
+      speedBtn.className = "chip text-xs cursor-pointer hover:bg-white/20 transition-colors";
+      speedBtn.textContent = `Speed: ${screens.conway.getSpeedLabel()}`;
+      speedBtn.onclick = () => {
+        const newSpeed = screens.conway.toggleSpeed();
+        speedBtn.textContent = `Speed: ${newSpeed}`;
+      };
+
+      const resetBtn = document.createElement("button");
+      resetBtn.type = "button";
+      resetBtn.className = "chip text-xs cursor-pointer hover:bg-white/20 transition-colors";
+      resetBtn.textContent = "Reset (Clean Slate)";
+      resetBtn.onclick = () => {
+        screens.conway.clear();
+      };
+
+      controlsContainer.append(playBtn, presetBtn, speedBtn, resetBtn);
+      dom.cardMeta.append(controlsContainer);
+      dom.cardMeta.dataset.visible = "true";
+    }
+
+    dom.card.focus();
+    announce(`Opened details dialog: ${card.title}. ${card.eyebrow}.`);
   }
 
   function closeCard() {
-    dom.card.dataset.visible = "false";
+    if (dom.card.dataset.visible === "true") {
+      dom.card.dataset.visible = "false";
+      announce("Closed details dialog.");
+      if (lastFocusedElement && typeof lastFocusedElement.focus === "function") {
+        lastFocusedElement.focus();
+      }
+    }
   }
 
   function handleAction(action: HotspotAction) {
@@ -473,11 +583,17 @@ export async function boot() {
       case "focus-pit":
         goTo("pit");
         break;
+      case "focus-pad":
+        goTo("pad");
+        break;
       case "stoke-fire":
         lounge.stoke();
+        fireAudio.stoke();
+        announce("Stoked the conversation pit fire. Flames flared bright!");
         break;
       case "poke-cat":
         cat.poke();
+        announce("Petted the cat.");
         break;
       case "card":
         openCard(action.card);
@@ -498,6 +614,8 @@ export async function boot() {
     screens.projects,
     desk.aboutScreen,
     screens.about,
+    props.padScreen,
+    screens.conway,
     dom.label,
     {
       onAction: handleAction,
@@ -535,6 +653,24 @@ export async function boot() {
   dom.back.addEventListener("click", () => goTo("orbit"));
   dom.screenTabs.forEach((tab, i) => tab.addEventListener("click", () => goTo("screen", i)));
   dom.cardClose.addEventListener("click", closeCard);
+  dom.soundBtn?.addEventListener("click", () => {
+    const muted = fireAudio.toggleMute();
+    if (dom.soundBtn) {
+      dom.soundBtn.textContent = muted ? "Sound: Off" : "Sound: On";
+      dom.soundBtn.setAttribute("aria-pressed", String(!muted));
+      announce(muted ? "Ambient sound muted" : "Ambient sound turned on");
+    }
+  });
+
+  document.querySelectorAll<HTMLButtonElement>("[data-hotspot]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const targetId = btn.dataset.hotspot;
+      const match = hotspots.find((h) => h.id === targetId);
+      if (match) {
+        handleAction(match.action);
+      }
+    });
+  });
 
   window.addEventListener("keydown", (event) => {
     if (event.key === "Escape") {
@@ -621,6 +757,7 @@ export async function boot() {
     // Read after fire update so stoke syncs with embers.
     embers.setBoost(lounge.fireBoost);
     embers.update(elapsed);
+    fireAudio.update(dt);
 
     // Driven every frame even while he is dissolved out: the idle is built from
     // continuous sines, and freezing it would mean he snaps to a new pose the
@@ -645,6 +782,13 @@ export async function boot() {
     } else if (view === "screen") {
       camera.position.copy(screenFocus.view.position);
       camera.lookAt(screenFocus.view.target);
+    } else if (view === "pad") {
+      camera.position.set(
+        PAD_VIEW.position.x + parallax.x * 0.008,
+        PAD_VIEW.position.y - parallax.y * 0.005,
+        PAD_VIEW.position.z,
+      );
+      camera.lookAt(PAD_TARGET);
     } else if (view === "desk") {
       // Slight drift so the close-up doesn't feel like a frozen screenshot.
       camera.position.set(
