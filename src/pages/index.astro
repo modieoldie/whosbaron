@@ -1,17 +1,27 @@
 ---
 import Base from "../layouts/Base.astro";
-import { profile } from "../data/content";
+import { profile, projects, experience, education, skills } from "../data/content";
 ---
 
 <Base>
-  <canvas id="scene-canvas"></canvas>
+  <!-- Skip to main content link for keyboard and screen reader users -->
+  <a href="#main-content" class="sr-only focus:not-sr-only ghost">Skip to main portfolio content</a>
 
-  <div id="loader" data-visible="true">
+  <!-- ARIA Live region for screen reader announcements -->
+  <div id="sr-announcer" class="sr-only" aria-live="polite" aria-atomic="true"></div>
+
+  <canvas
+    id="scene-canvas"
+    role="img"
+    aria-label="3D interactive workspace and room portfolio of Baron Li. Screen reader users can use the accessible controls or text version below to explore."
+  ></canvas>
+
+  <div id="loader" data-visible="true" role="status" aria-live="polite" aria-label="Loading 3D room scene">
     <p class="marker">Building the room</p>
     <div id="loader-bar"></div>
   </div>
 
-  <div id="hover-label" data-visible="false"></div>
+  <div id="hover-label" data-visible="false" aria-hidden="true"></div>
 
   <!-- One dot per desk prop; filled in and positioned by the scene. -->
   <div id="prop-markers" data-visible="false" aria-hidden="true"></div>
@@ -23,29 +33,38 @@ import { profile } from "../data/content";
     </h1>
   </div>
 
-  <!-- `data-view` lets the stylesheet treat each view's line on its own terms:
-       they are different lengths, and only the short one can hold a phone to a
-       single line. Kept in the markup so it is right before the scene boots. -->
-  <div id="hint" data-visible="false" data-view="orbit">
-    <!-- Rewritten per view by the scene; this is the orbit copy. -->
+  <div id="hint" data-visible="false" data-view="orbit" aria-live="polite">
     <p id="hint-text" class="marker">Drag to look around · Click the desk</p>
   </div>
 
-  <button id="back-btn" class="ghost" data-visible="false" type="button">← Back to the room</button>
+  <button id="back-btn" class="ghost" data-visible="false" type="button" aria-label="Back to room view">
+    ← Back to the room
+  </button>
 
-  <!-- Narrow viewports read one monitor at a time, so they need a way to reach
-       the other one. Never shown on a desktop, which frames both at once. -->
-  <div id="screen-switch" data-visible="false">
-    <button type="button" data-active="true">Projects</button>
-    <button type="button" data-active="false">About</button>
+  <div id="screen-switch" data-visible="false" role="tablist" aria-label="Monitor view selection">
+    <button type="button" id="tab-projects" role="tab" aria-selected="true" aria-controls="main-content" data-active="true">
+      Projects
+    </button>
+    <button type="button" id="tab-about" role="tab" aria-selected="false" aria-controls="main-content" data-active="false">
+      About
+    </button>
   </div>
 
-  <aside id="card" data-visible="false" aria-live="polite">
+  <aside
+    id="card"
+    data-visible="false"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="card-title"
+    aria-describedby="card-body"
+    tabindex="-1"
+  >
     <button
       id="card-close"
-      class="absolute top-4 right-4 font-mono text-xs text-ash-dim transition-colors hover:text-brass"
+      class="absolute top-4 right-4 font-mono text-xs text-ash-dim transition-colors hover:text-brass cursor-pointer"
       type="button"
-      aria-label="Close">✕</button
+      aria-label="Close details dialog"
+      >✕</button
     >
     <p id="card-eyebrow" class="marker"></p>
     <h2 id="card-title" class="mt-3 font-serif text-3xl leading-tight font-light text-bone"></h2>
@@ -54,12 +73,21 @@ import { profile } from "../data/content";
     <a id="card-link" class="ghost mt-6 inline-block" data-visible="false" href="#"></a>
   </aside>
 
-  <nav id="corner-links">
+  <nav id="corner-links" aria-label="Primary navigation and external links">
+    <button
+      id="sound-btn"
+      type="button"
+      class="font-mono text-[0.6875rem] tracking-[0.2em] text-ash uppercase transition-colors hover:text-brass cursor-pointer"
+      aria-label="Toggle ambient sound"
+      aria-pressed="true"
+      >Sound: On</button
+    >
     <a
       href={profile.github}
       target="_blank"
       rel="noopener noreferrer"
       class="font-mono text-[0.6875rem] tracking-[0.2em] text-ash uppercase transition-colors hover:text-brass"
+      aria-label="GitHub profile (opens in new tab)"
       >GitHub</a
     >
     <a
@@ -67,14 +95,85 @@ import { profile } from "../data/content";
       target="_blank"
       rel="noopener noreferrer"
       class="font-mono text-[0.6875rem] tracking-[0.2em] text-ash uppercase transition-colors hover:text-brass"
+      aria-label="LinkedIn profile (opens in new tab)"
       >LinkedIn</a
     >
     <a
       href="/text"
       class="font-mono text-[0.6875rem] tracking-[0.2em] text-ash-dim uppercase transition-colors hover:text-brass"
+      aria-label="Accessible text version"
       >Text version</a
     >
   </nav>
+
+  <!-- Screen reader accessible main section. Contains semantic landmarks, full content, and interactive controls -->
+  <main id="main-content" tabindex="-1">
+    <section class="sr-only" aria-label="Screen reader accessible portfolio content and 3D room controls">
+      <h1>{profile.name} — Portfolio & Interactive Room</h1>
+      <p>{profile.tagline}</p>
+
+      <h2>Interactive 3D Room Controls</h2>
+      <p>Select any room object below to focus the camera or view detailed information:</p>
+      <ul>
+        <li><button type="button" data-hotspot="desk">Pull up to the desk (Focus Monitors)</button></li>
+        <li><button type="button" data-hotspot="screen-left">Projects Monitor — Read project overview</button></li>
+        <li><button type="button" data-hotspot="screen-right">About & Contact Monitor — Read bio</button></li>
+        <li><button type="button" data-hotspot="pit">Step down into the conversation pit</button></li>
+        <li><button type="button" data-hotspot="fire">Stoke the fire</button></li>
+        <li><button type="button" data-hotspot="cat">Pet the cat</button></li>
+        <li><button type="button" data-hotspot="diploma">View University at Buffalo Education (Diploma)</button></li>
+        <li><button type="button" data-hotspot="headphones">View Karaoke Web Platform Project (Headphones)</button></li>
+        <li><button type="button" data-hotspot="nfc">View Smart Home Automation Project (NFC Tag)</button></li>
+        <li><button type="button" data-hotspot="pad">View Conway's Game of Life Project (Sketchpad)</button></li>
+        <li><button type="button" data-hotspot="books">View Languages & Tooling (Books)</button></li>
+        <li><button type="button" data-hotspot="resume">Open Résumé PDF (Tray)</button></li>
+        <li><button type="button" data-hotspot="phone">Get in touch (Phone)</button></li>
+      </ul>
+
+      <h2>Projects Summary</h2>
+      {projects.map((project) => (
+        <article>
+          <h3>{project.title} ({project.period})</h3>
+          <p>{project.blurb}</p>
+          <p>Technologies: {project.stack.join(", ")}</p>
+          <ul>
+            {project.bullets.map((b) => <li>{b}</li>)}
+          </ul>
+          {project.demo && (
+            <a href={project.demo} target="_blank" rel="noopener noreferrer">
+              Live Demo for {project.title} (opens in a new tab)
+            </a>
+          )}
+        </article>
+      ))}
+
+      <h2>Experience & Education Summary</h2>
+      {experience.map((e) => (
+        <div>
+          <h3>{e.role} — {e.org}</h3>
+          <p>{e.location} | {e.period}</p>
+          <ul>{e.bullets.map((b) => <li>{b}</li>)}</ul>
+        </div>
+      ))}
+      {education.map((ed) => (
+        <div>
+          <h3>{ed.school} — {ed.degree}</h3>
+          <p>{ed.location} | {ed.period}</p>
+          <p>{ed.detail}</p>
+        </div>
+      ))}
+
+      <h2>Skills</h2>
+      {skills.map((s) => (
+        <div>
+          <h3>{s.group}</h3>
+          <p>{s.items.join(", ")}</p>
+        </div>
+      ))}
+
+      <p><a href="/text">Go to clean text version page</a></p>
+    </section>
+  </main>
 
   <noscript>
     <div
@@ -93,8 +192,6 @@ import { profile } from "../data/content";
   import { boot } from "../scene/main";
 
   boot().catch((error) => {
-    // WebGL can fail for reasons outside our control: a blocklisted driver, a
-    // locked-down browser. Don't strand the visitor on a black page.
     console.error("[scene] failed to start", error);
     window.location.replace("/text");
   });

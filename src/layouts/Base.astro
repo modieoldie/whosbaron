@@ -5,12 +5,18 @@ import { profile } from "../data/content";
 interface Props {
   title?: string;
   description?: string;
+  image?: string;
 }
 
 const {
   title = profile.name,
   description = profile.tagline,
+  image = "/og-room-dark.jpg",
 } = Astro.props;
+
+const siteUrl = Astro.site ? Astro.site.href.replace(/\/$/, "") : "https://whosbaron.com";
+const canonicalURL = Astro.site ? new URL(Astro.url.pathname, Astro.site).href : `${siteUrl}${Astro.url.pathname}`;
+const imageURL = Astro.site ? new URL(image, Astro.site).href : `${siteUrl}${image}`;
 ---
 
 <!doctype html>
@@ -20,12 +26,28 @@ const {
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{title}</title>
     <meta name="description" content={description} />
-    <link rel="canonical" href={Astro.site} />
+    <link rel="canonical" href={canonicalURL} />
 
+    <!-- Open Graph / Social Media Visual Preview -->
     <meta property="og:type" content="website" />
+    <meta property="og:site_name" content={profile.name} />
+    <meta property="og:url" content={canonicalURL} />
     <meta property="og:title" content={title} />
     <meta property="og:description" content={description} />
+    <meta property="og:image" content={imageURL} />
+    <meta property="og:image:secure_url" content={imageURL} />
+    <meta property="og:image:type" content="image/jpeg" />
+    <meta property="og:image:width" content="1792" />
+    <meta property="og:image:height" content="1008" />
+    <meta property="og:image:alt" content="3D interactive workspace and room of Baron Li rendered in dark mode" />
+
+    <!-- Twitter Card -->
     <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:url" content={canonicalURL} />
+    <meta name="twitter:title" content={title} />
+    <meta name="twitter:description" content={description} />
+    <meta name="twitter:image" content={imageURL} />
+    <meta name="twitter:image:alt" content="3D interactive workspace and room of Baron Li rendered in dark mode" />
 
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
 

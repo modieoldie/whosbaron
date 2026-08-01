@@ -4,10 +4,12 @@ import { profile, projects, experience, education, skills } from "../data/conten
 ---
 
 <Base title={`${profile.name} — Text version`}>
-  <main class="mx-auto max-w-3xl px-6 py-20">
+  <a href="#main-content" class="sr-only focus:not-sr-only ghost">Skip to main content</a>
+  <main id="main-content" class="mx-auto max-w-3xl px-6 py-20" tabindex="-1">
     <a
       href="/"
       class="font-mono text-[0.6875rem] tracking-[0.2em] text-ash-dim uppercase transition-colors hover:text-brass"
+      aria-label="Return to the 3D room version"
       >← Back to the room</a
     >
 
@@ -18,29 +20,29 @@ import { profile, projects, experience, education, skills } from "../data/conten
       </h1>
       <p class="mt-6 max-w-xl font-mono text-sm leading-relaxed text-ash">{profile.tagline}</p>
 
-      <div class="mt-8 flex flex-wrap gap-x-8 gap-y-3">
-        <a href={`mailto:${profile.email}`} class="font-mono text-xs text-bone hover:text-brass"
+      <nav aria-label="Contact and Social Links" class="mt-8 flex flex-wrap gap-x-8 gap-y-3">
+        <a href={`mailto:${profile.email}`} class="font-mono text-xs text-bone hover:text-brass" aria-label={`Email ${profile.email}`}
           >{profile.email}</a
         >
-        <a href={profile.resume} class="font-mono text-xs text-brass">Résumé (PDF)</a>
-        <a href={profile.github} class="font-mono text-xs text-ash hover:text-brass">GitHub</a>
-        <a href={profile.linkedin} class="font-mono text-xs text-ash hover:text-brass">LinkedIn</a>
-      </div>
+        <a href={profile.resume} target="_blank" rel="noopener noreferrer" class="font-mono text-xs text-brass" aria-label="Résumé PDF (opens in a new tab)">Résumé (PDF)</a>
+        <a href={profile.github} target="_blank" rel="noopener noreferrer" class="font-mono text-xs text-ash hover:text-brass" aria-label="GitHub profile (opens in a new tab)">GitHub</a>
+        <a href={profile.linkedin} target="_blank" rel="noopener noreferrer" class="font-mono text-xs text-ash hover:text-brass" aria-label="LinkedIn profile (opens in a new tab)">LinkedIn</a>
+      </nav>
     </header>
 
-    <section class="mt-20">
-      <p class="marker">— 01 / Projects</p>
+    <section aria-labelledby="heading-projects" class="mt-20">
+      <h2 id="heading-projects" class="marker">— 01 / Projects</h2>
       {
         projects.map((project) => (
           <article class="hairline mt-10 pt-10">
             <div class="flex flex-col gap-1 md:flex-row md:items-baseline md:justify-between">
-              <h2 class="font-serif text-3xl font-light text-bone">{project.title}</h2>
+              <h3 class="font-serif text-3xl font-light text-bone">{project.title}</h3>
               <span class="font-mono text-[0.6875rem] tracking-[0.14em] text-ash-dim uppercase">
                 {project.period}
               </span>
             </div>
             <p class="mt-4 max-w-2xl text-sm leading-relaxed text-ash">{project.blurb}</p>
-            <div class="mt-5 flex flex-wrap gap-2">
+            <div class="mt-5 flex flex-wrap gap-2" aria-label="Technologies used">
               {project.stack.map((item) => (
                 <span class="chip">{item}</span>
               ))}
@@ -48,7 +50,7 @@ import { profile, projects, experience, education, skills } from "../data/conten
             <ul class="mt-6 max-w-2xl space-y-2.5">
               {project.bullets.map((bullet) => (
                 <li class="flex gap-3 text-sm leading-relaxed text-ash">
-                  <span class="mt-2 h-px w-3 shrink-0 bg-brass-dim" />
+                  <span class="mt-2 h-px w-3 shrink-0 bg-brass-dim" aria-hidden="true" />
                   <span>{bullet}</span>
                 </li>
               ))}
@@ -59,6 +61,7 @@ import { profile, projects, experience, education, skills } from "../data/conten
                 target="_blank"
                 rel="noopener noreferrer"
                 class="mt-6 inline-block font-mono text-xs tracking-[0.2em] text-brass uppercase"
+                aria-label={`Live demo for ${project.title} (opens in a new tab)`}
               >
                 Live demo ↗
               </a>
@@ -68,41 +71,41 @@ import { profile, projects, experience, education, skills } from "../data/conten
       }
     </section>
 
-    <section class="mt-20">
-      <p class="marker">— 02 / Experience & Education</p>
+    <section aria-labelledby="heading-experience" class="mt-20">
+      <h2 id="heading-experience" class="marker">— 02 / Experience & Education</h2>
       {
         experience.map((role) => (
-          <div class="hairline mt-10 pt-10">
-            <h2 class="font-serif text-3xl font-light text-bone">{role.role}</h2>
+          <article class="hairline mt-10 pt-10">
+            <h3 class="font-serif text-3xl font-light text-bone">{role.role}</h3>
             <p class="mt-2 font-mono text-xs tracking-[0.12em] text-brass-dim uppercase">
               {role.org} · {role.location} · {role.period}
             </p>
             <ul class="mt-5 max-w-2xl space-y-2.5">
               {role.bullets.map((bullet) => (
                 <li class="flex gap-3 text-sm leading-relaxed text-ash">
-                  <span class="mt-2 h-px w-3 shrink-0 bg-brass-dim" />
+                  <span class="mt-2 h-px w-3 shrink-0 bg-brass-dim" aria-hidden="true" />
                   <span>{bullet}</span>
                 </li>
               ))}
             </ul>
-          </div>
+          </article>
         ))
       }
       {
         education.map((school) => (
-          <div class="hairline mt-10 pt-10">
-            <h2 class="font-serif text-3xl font-light text-bone">{school.school}</h2>
+          <article class="hairline mt-10 pt-10">
+            <h3 class="font-serif text-3xl font-light text-bone">{school.school}</h3>
             <p class="mt-2 font-mono text-xs tracking-[0.12em] text-brass-dim uppercase">
               {school.degree} · {school.location} · {school.period}
             </p>
             <p class="mt-4 text-sm text-ash-dim">{school.detail}</p>
-          </div>
+          </article>
         ))
       }
     </section>
 
-    <section class="mt-20">
-      <p class="marker">— 03 / Skills</p>
+    <section aria-labelledby="heading-skills" class="mt-20">
+      <h2 id="heading-skills" class="marker">— 03 / Skills</h2>
       <div class="mt-10 grid gap-x-12 gap-y-10 sm:grid-cols-2">
         {
           skills.map((group) => (

@@ -48,9 +48,42 @@
   }
 
   :focus-visible {
-    outline: 1px solid var(--color-brass);
+    outline: 2px solid var(--color-brass);
     outline-offset: 3px;
+    box-shadow: 0 0 0 4px rgba(201, 169, 97, 0.3);
   }
+}
+
+/* Screen reader utility classes */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
+.focus\:not-sr-only:focus,
+.focus\:not-sr-only:focus-visible {
+  position: fixed;
+  top: 1rem;
+  left: 1rem;
+  z-index: 1000;
+  width: auto;
+  height: auto;
+  padding: 0.75rem 1.25rem;
+  margin: 0;
+  overflow: visible;
+  clip: auto;
+  white-space: normal;
+  background-color: var(--color-surface);
+  color: var(--color-brass);
+  border: 2px solid var(--color-brass);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.8);
 }
 
 @layer components {
