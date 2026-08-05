@@ -18,7 +18,7 @@ const TITLE_BAR = 56;
 export type ScreenLink = { href: string; label: string; text: string; x: number; y: number; w: number };
 
 /** Padding around a link's painted box, so a near-miss still counts as a hit. */
-const LINK_PAD = { x: 10, top: 22, bottom: 10 };
+const LINK_PAD = { x: 12, top: 26, bottom: 14 };
 
 /**
  * Side of the square every screen is averaged down to before its colour is read.
@@ -201,12 +201,12 @@ abstract class CanvasScreen {
     const lights = ["#c96a5e", "#d8a657", "#7fb069"];
     lights.forEach((color, i) => {
       c.beginPath();
-      c.arc(30 + i * 27, height / 2, 8, 0, Math.PI * 2);
+      c.arc(32 + i * 29, height / 2, 9, 0, Math.PI * 2);
       c.fillStyle = color;
       c.fill();
     });
 
-    c.font = `500 19px ${MONO}`;
+    c.font = `500 22px ${MONO}`;
     c.fillStyle = CSS.ash;
     c.textAlign = "center";
     c.textBaseline = "middle";
@@ -242,10 +242,11 @@ abstract class CanvasScreen {
  * Left monitor: the projects browser. This is the site's navigation. *
  * ------------------------------------------------------------------ */
 
-const SIDEBAR_W = 400;
+/** Wide enough that the longest project title still sets on one line at 23px. */
+const SIDEBAR_W = 416;
 /** Sized so the whole list clears the bottom edge: LIST_TOP + rows ≤ 640. */
-const ROW_H = 84;
-const LIST_TOP = 118;
+const ROW_H = 88;
+const LIST_TOP = 106;
 
 /**
  * The detail pane is a scrolling viewport, not a fixed poster: a project's
@@ -255,13 +256,15 @@ const LIST_TOP = 118;
 const DETAIL_TOP = TITLE_BAR;
 const DETAIL_BOTTOM_PAD = 18;
 /** First baseline of the detail content, measured from DETAIL_TOP. */
-const DETAIL_LEAD = 76;
+const DETAIL_LEAD = 82;
 const DETAIL_X = SIDEBAR_W + 40;
 /** Right margin is wider than the left to leave the scrollbar its own gutter. */
 const DETAIL_RIGHT_PAD = 56;
 /** Link rows: a mono label in the gutter, then the href itself. */
-const LINK_FONT = `400 15px ${MONO}`;
-const LINK_TEXT_X = 66;
+const LINK_FONT = `400 17px ${MONO}`;
+const LINK_TEXT_X = 74;
+/** Shared by the chip's measure pass and its painter; they must not drift. */
+const CHIP_FONT = `400 17px ${MONO}`;
 
 /** A laid-out piece of the detail pane, positioned in content space. */
 type DetailItem =
@@ -387,9 +390,9 @@ export class ProjectsScreen extends CanvasScreen {
     c.fillStyle = CSS.hairline;
     c.fillRect(SIDEBAR_W - 1, TITLE_BAR, 1, this.height - TITLE_BAR);
 
-    c.font = `500 15px ${MONO}`;
+    c.font = `500 17px ${MONO}`;
     c.fillStyle = CSS.ashDim;
-    c.fillText(`${projects.length} PROJECTS`, 28, 96);
+    c.fillText(`${projects.length} PROJECTS`, 28, 92);
 
     projects.forEach((project, i) => {
       const y = LIST_TOP + i * ROW_H;
@@ -405,21 +408,21 @@ export class ProjectsScreen extends CanvasScreen {
         c.fillRect(0, y, 4, ROW_H);
       }
 
-      c.font = `400 20px ${SANS}`;
+      c.font = `400 23px ${SANS}`;
       c.fillStyle = isSelected ? CSS.bone : isHovered ? CSS.bone : CSS.ash;
       // Stops short of the selected-row chevron so the longest title clears it
       // rather than ellipsising into it.
       const title = this.wrap(project.title, SIDEBAR_W - 74, 1)[0]!;
-      c.fillText(title, 28, y + 37);
+      c.fillText(title, 28, y + 38);
 
-      c.font = `400 14px ${MONO}`;
+      c.font = `400 16px ${MONO}`;
       c.fillStyle = isSelected ? CSS.brassDim : CSS.ashDim;
-      c.fillText(project.period.toUpperCase(), 28, y + 64);
+      c.fillText(project.period.toUpperCase(), 28, y + 70);
 
       if (isSelected) {
         c.fillStyle = CSS.brass;
-        c.font = `400 18px ${MONO}`;
-        c.fillText("▸", SIDEBAR_W - 38, y + 48);
+        c.font = `400 20px ${MONO}`;
+        c.fillText("▸", SIDEBAR_W - 38, y + 52);
       }
     });
   }
@@ -444,15 +447,15 @@ export class ProjectsScreen extends CanvasScreen {
     const items: DetailItem[] = [];
     let y = DETAIL_LEAD;
 
-    const titleFont = `300 44px ${SERIF}`;
+    const titleFont = `300 50px ${SERIF}`;
     c.font = titleFont;
     for (const line of this.wrap(project.title, maxW)) {
       items.push({ kind: "text", text: line, x, y, font: titleFont, color: CSS.bone });
-      y += 48;
+      y += 54;
     }
 
-    y += 6;
-    const metaFont = `400 14px ${MONO}`;
+    y += 8;
+    const metaFont = `400 16px ${MONO}`;
     c.font = metaFont;
     items.push({
       kind: "text",
@@ -463,41 +466,41 @@ export class ProjectsScreen extends CanvasScreen {
       color: CSS.brassDim,
     });
 
-    y += 38;
-    const blurbFont = `400 20px ${SANS}`;
+    y += 42;
+    const blurbFont = `400 23px ${SANS}`;
     c.font = blurbFont;
     for (const line of this.wrap(project.blurb, maxW)) {
       items.push({ kind: "text", text: line, x, y, font: blurbFont, color: CSS.ash });
-      y += 30;
+      y += 34;
     }
 
     // Stack chips, wrapped across as many rows as they need.
-    y += 24;
-    c.font = `400 15px ${MONO}`;
+    y += 26;
+    c.font = CHIP_FONT;
     let chipX = x;
     for (const item of project.stack) {
-      const w = c.measureText(item).width + 26;
+      const w = c.measureText(item).width + 28;
       if (chipX + w > x + maxW) {
         chipX = x;
-        y += 36;
+        y += 40;
       }
       items.push({ kind: "chip", text: item, x: chipX, y, w });
       chipX += w + 10;
     }
 
-    y += 46;
+    y += 50;
     items.push({ kind: "rule", x, y, w: maxW, color: CSS.hairline });
-    y += 34;
+    y += 38;
 
-    const bulletFont = `400 18px ${SANS}`;
+    const bulletFont = `400 21px ${SANS}`;
     c.font = bulletFont;
     for (const bullet of project.bullets) {
-      items.push({ kind: "rule", x, y: y - 6, w: 16, color: CSS.brassDim });
-      for (const line of this.wrap(bullet, maxW - 34)) {
-        items.push({ kind: "text", text: line, x: x + 34, y, font: bulletFont, color: CSS.ash });
-        y += 26;
+      items.push({ kind: "rule", x, y: y - 7, w: 18, color: CSS.brassDim });
+      for (const line of this.wrap(bullet, maxW - 38)) {
+        items.push({ kind: "text", text: line, x: x + 38, y, font: bulletFont, color: CSS.ash });
+        y += 30;
       }
-      y += 16;
+      y += 18;
     }
 
     // Links live at the bottom of the scroll, where a reader who got through
@@ -514,7 +517,7 @@ export class ProjectsScreen extends CanvasScreen {
       for (const [label, href] of hrefs) {
         const text = `↗ ${href.replace(/^https?:\/\//, "").replace(/\/$/, "")}`;
         links.push({ href, label, text, x, y, w: LINK_TEXT_X + c.measureText(text).width });
-        y += 34;
+        y += 38;
       }
     }
 
@@ -532,7 +535,7 @@ export class ProjectsScreen extends CanvasScreen {
         font: LINK_FONT,
         color: CSS.ashDim,
       });
-      y += 34;
+      y += 38;
     }
 
     return { items, links, height: y + 12 };
@@ -559,11 +562,11 @@ export class ProjectsScreen extends CanvasScreen {
       if (item.kind === "chip") {
         c.strokeStyle = CSS.hairline;
         c.lineWidth = 1;
-        this.roundRect(item.x, item.y - 19, item.w, 32, 4);
+        this.roundRect(item.x, item.y - 22, item.w, 36, 4);
         c.stroke();
-        c.font = `400 15px ${MONO}`;
+        c.font = CHIP_FONT;
         c.fillStyle = CSS.ash;
-        c.fillText(item.text, item.x + 13, item.y + 3);
+        c.fillText(item.text, item.x + 14, item.y + 3);
         continue;
       }
       c.font = item.font;
@@ -577,7 +580,7 @@ export class ProjectsScreen extends CanvasScreen {
 
       if (hot) {
         c.fillStyle = "rgba(201,169,97,0.10)";
-        this.roundRect(link.x - 10, link.y - 22, link.w + 20, 32, 4);
+        this.roundRect(link.x - LINK_PAD.x, link.y - LINK_PAD.top, link.w + LINK_PAD.x * 2, 40, 4);
         c.fill();
       }
 
@@ -588,7 +591,7 @@ export class ProjectsScreen extends CanvasScreen {
       c.fillStyle = hot ? CSS.brass : CSS.brassDim;
       c.fillText(link.text, textX, link.y);
       // Underline: without it the href reads as one more line of metadata.
-      c.fillRect(textX, link.y + 7, link.w - LINK_TEXT_X, 1);
+      c.fillRect(textX, link.y + 8, link.w - LINK_TEXT_X, 1);
     });
 
     c.restore();
@@ -660,26 +663,26 @@ const GROUP_LABEL: Record<string, string> = {
  * The skill rows are the one exception: they wrap, so they flow from `rows`
  * and are sized to land above `rule2`. */
 const ABOUT = {
-  prompt: 96,
-  name: 156,
-  meta: 190,
-  tagline: 228,
-  taglineLead: 30,
-  rule1: 292,
-  rows: 326,
-  rowLineLead: 25,
-  rowGap: 11,
-  rule2: 528,
-  links: 568,
-  linkLead: 38,
+  prompt: 100,
+  name: 172,
+  meta: 206,
+  tagline: 244,
+  taglineLead: 33,
+  rule1: 304,
+  rows: 338,
+  rowLineLead: 29,
+  rowGap: 13,
+  rule2: 556,
+  links: 598,
 };
 
 const ROW_LABEL_X = 28;
 const ROW_VALUE_X = 200;
-/** Contact links sit in two columns; four of them fill exactly two rows. */
-const LINK_COL_X = [28, 528];
+/** Named links are short, so all four flow along one row under the rule. */
+const LINK_X = 28;
+const LINK_GAP = 50;
 /** Larger than the projects pane's links: this panel is read, not scanned. */
-const ABOUT_LINK_FONT = `400 18px ${MONO}`;
+const ABOUT_LINK_FONT = `400 21px ${MONO}`;
 
 export class AboutScreen extends CanvasScreen {
   hoveredLink = -1;
@@ -704,25 +707,23 @@ export class AboutScreen extends CanvasScreen {
 
     const c = this.ctx;
     c.font = ABOUT_LINK_FONT;
-    const strip = (url: string) => url.replace(/^https?:\/\//, "").replace(/\/$/, "");
 
-    const entries: [label: string, text: string, href: string][] = [
-      ["EMAIL", profile.email, `mailto:${profile.email}`],
-      ["RESUME", profile.resume.replace(/^\//, ""), profile.resume],
-      ["GITHUB", strip(profile.github), profile.github],
-      ["LINKEDIN", strip(profile.linkedin), profile.linkedin],
+    // The destination is the label — the URL itself carries nothing a reader
+    // wants, and spelling it out made four lines of noise out of four words.
+    const entries: [label: string, href: string][] = [
+      ["Email", `mailto:${profile.email}`],
+      ["Résumé", profile.resume],
+      ["GitHub", profile.github],
+      ["LinkedIn", profile.linkedin],
     ];
 
-    this.linkCache = entries.map(([label, text, href], i) => {
-      const display = `↗ ${text}`;
-      return {
-        href,
-        label,
-        text: display,
-        x: LINK_COL_X[i % 2]!,
-        y: ABOUT.links + Math.floor(i / 2) * ABOUT.linkLead,
-        w: c.measureText(display).width,
-      };
+    let x = LINK_X;
+    this.linkCache = entries.map(([label, href]) => {
+      const display = `↗ ${label}`;
+      const w = c.measureText(display).width;
+      const link = { href, label, text: display, x, y: ABOUT.links, w };
+      x += w + LINK_GAP;
+      return link;
     });
     return this.linkCache;
   }
@@ -771,22 +772,22 @@ export class AboutScreen extends CanvasScreen {
   private drawIdentity() {
     const c = this.ctx;
 
-    c.font = `400 21px ${MONO}`;
+    c.font = `400 24px ${MONO}`;
     c.fillStyle = CSS.green;
     c.fillText("$", 28, ABOUT.prompt);
     c.fillStyle = CSS.ash;
-    c.fillText("whoami", 54, ABOUT.prompt);
+    c.fillText("whoami", 58, ABOUT.prompt);
 
     // The one moving thing on the panel, and the only honest one: a caret.
     if (this.caretOn) {
-      c.fillRect(64 + c.measureText("whoami").width, ABOUT.prompt - 15, 10, 19);
+      c.fillRect(70 + c.measureText("whoami").width, ABOUT.prompt - 17, 11, 22);
     }
 
-    c.font = `300 50px ${SERIF}`;
+    c.font = `300 58px ${SERIF}`;
     c.fillStyle = CSS.bone;
     c.fillText(profile.name, 28, ABOUT.name);
 
-    c.font = `400 15px ${MONO}`;
+    c.font = `400 17px ${MONO}`;
     c.fillStyle = CSS.brassDim;
     c.fillText(
       `${profile.location.toUpperCase()} · CURRENTLY OPEN TO FULL-TIME AND INTERNSHIP`,
@@ -794,7 +795,7 @@ export class AboutScreen extends CanvasScreen {
       ABOUT.meta,
     );
 
-    const taglineFont = `400 20px ${SANS}`;
+    const taglineFont = `400 22px ${SANS}`;
     c.font = taglineFont;
     c.fillStyle = CSS.ash;
     this.wrap(profile.tagline, this.width - 84, 2).forEach((line, i) => {
@@ -822,7 +823,7 @@ export class AboutScreen extends CanvasScreen {
 
     // Values are set big enough that the longer skill lists no longer fit on
     // one line, so rows flow: each one takes the height its value needs.
-    const valueFont = `400 19px ${SANS}`;
+    const valueFont = `400 22px ${SANS}`;
     const valueW = this.width - ROW_VALUE_X - 36;
     let y = ABOUT.rows;
 
@@ -830,7 +831,7 @@ export class AboutScreen extends CanvasScreen {
       c.font = valueFont;
       const wrapped = this.wrap(value, valueW, 2);
 
-      c.font = `400 15px ${MONO}`;
+      c.font = `400 17px ${MONO}`;
       c.fillStyle = CSS.ashDim;
       c.fillText(label, ROW_LABEL_X, y);
 
@@ -852,7 +853,7 @@ export class AboutScreen extends CanvasScreen {
 
       if (hot) {
         c.fillStyle = "rgba(201,169,97,0.10)";
-        this.roundRect(link.x - LINK_PAD.x, link.y - LINK_PAD.top, link.w + LINK_PAD.x * 2, 32, 4);
+        this.roundRect(link.x - LINK_PAD.x, link.y - LINK_PAD.top, link.w + LINK_PAD.x * 2, 40, 4);
         c.fill();
       }
 
@@ -860,7 +861,7 @@ export class AboutScreen extends CanvasScreen {
       c.fillStyle = hot ? CSS.brass : CSS.brassDim;
       c.fillText(link.text, link.x, link.y);
       // Underline: without it the href reads as one more line of metadata.
-      c.fillRect(link.x, link.y + 8, link.w, 1);
+      c.fillRect(link.x, link.y + 9, link.w, 1);
     });
   }
 }
