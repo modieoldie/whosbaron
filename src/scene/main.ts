@@ -15,7 +15,7 @@ import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPa
 import { OutputPass } from "three/examples/jsm/postprocessing/OutputPass.js";
 
 import { buildRoom, ROOM_CENTER_Z } from "./room";
-import { buildDesk, MONITOR_X, SCREEN_W, SCREEN_Y, SCREEN_Z, DESK_TOP_Y } from "./desk";
+import { buildDesk, MONITOR_X, SCREEN_W, SCREEN_Y, SCREEN_Z } from "./desk";
 import { buildLounge, PIT } from "./lounge";
 import { buildProps } from "./props";
 import { buildFigure } from "./figure";
@@ -87,12 +87,19 @@ const PIT_VIEW = {
   target: PIT_TARGET,
 };
 
-// Tablet (Conway's Game of Life) close-up zoom view.
-const PAD_TARGET = new THREE.Vector3(0.68, DESK_TOP_Y + 0.005, -0.95);
-const PAD_VIEW = {
-  position: new THREE.Vector3(0.68, DESK_TOP_Y + 0.26, -0.73),
-  target: PAD_TARGET,
-};
+// Tablet (Conway's Game of Life) close-up. The pad lies flat on the desk and is
+// turned about 16° off the room's axes, so a view flown in on the room's axes
+// arrives looking at it crooked and from a shallow angle. This framing is taken
+// from the panel's own transform instead: centred, square on, its edges parallel
+// to the frame, which is what a grid you click cells on wants.
+/** Breathing room around the panel, in metres. Enough to show the shell's edge. */
+const PAD_MARGIN = 0.018;
+/**
+ * How far off straight-down the camera sits. Dead overhead is exactly square but
+ * leaves `lookAt` with no up vector to resolve the roll against; a small lean
+ * toward the near edge of the pad settles it, at about 2% of foreshortening.
+ */
+const PAD_TILT = THREE.MathUtils.degToRad(12);
 
 /** Per-view orbit limits. The pit needs tighter bounds to keep the camera above the well. */
 const ORBIT_LIMITS = {
@@ -352,6 +359,40 @@ export async function boot() {
       .add(DESK_TARGET);
   }
   updateDeskView();
+
+  const PAD_VIEW = { position: new THREE.Vector3(), target: new THREE.Vector3() };
+
+  /**
+   * Frame the tablet from its own transform rather than the room's: the pad is
+   * turned on the desk, and a camera placed in room coordinates inherits that
+   * skew. Read the panel's axes off its world matrix, sit back along its normal
+   * far enough to hold the whole of it at this aspect ratio, and the square
+   * lands square.
+   */
+  function updatePadView() {
+    props.padScreen.updateWorldMatrix(true, false);
+    const q = props.padScreen.getWorldQuaternion(new THREE.Quaternion());
+    // +Z is out of the glass, straight up since the pad lies flat; +Y is the top
+    // of the texture, the edge furthest from the chair.
+    const normal = new THREE.Vector3(0, 0, 1).applyQuaternion(q);
+    const up = new THREE.Vector3(0, 1, 0).applyQuaternion(q);
+
+    const size = (props.padScreen.geometry as THREE.PlaneGeometry).parameters;
+    const t = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
+    const distance = Math.max(
+      (size.height / 2 + PAD_MARGIN) / t,
+      (size.width / 2 + PAD_MARGIN) / (t * camera.aspect),
+    );
+
+    props.padScreen.getWorldPosition(PAD_VIEW.target);
+    PAD_VIEW.position
+      .copy(normal)
+      .multiplyScalar(Math.cos(PAD_TILT))
+      .addScaledVector(up, -Math.sin(PAD_TILT))
+      .multiplyScalar(distance)
+      .add(PAD_VIEW.target);
+  }
+  updatePadView();
 
   let view: ViewName = "orbit";
   let tween: { fromPos: THREE.Vector3; fromTarget: THREE.Vector3; to: typeof ORBIT_VIEW; t: number; duration: number } | null = null;
@@ -719,6 +760,7 @@ export async function boot() {
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
     updateDeskView();
+    updatePadView();
     renderer.setSize(window.innerWidth, window.innerHeight);
     composer?.setSize(window.innerWidth, window.innerHeight);
 
@@ -784,12 +826,11 @@ export async function boot() {
       camera.position.copy(screenFocus.view.position);
       camera.lookAt(screenFocus.view.target);
     } else if (view === "pad") {
-      camera.position.set(
-        PAD_VIEW.position.x + parallax.x * 0.008,
-        PAD_VIEW.position.y - parallax.y * 0.005,
-        PAD_VIEW.position.z,
-      );
-      camera.lookAt(PAD_TARGET);
+      // Dead still, unlike the desk view. Here the pointer is a cursor over a
+      // grid of cells, not a head leaning at a scene: any drift under it moves
+      // the cell you are aiming at.
+      camera.position.copy(PAD_VIEW.position);
+      camera.lookAt(PAD_VIEW.target);
     } else if (view === "desk") {
       // Slight drift so the close-up doesn't feel like a frozen screenshot.
       camera.position.set(

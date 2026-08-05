@@ -297,7 +297,11 @@ export class Interaction {
   private spent(hotspot: Hotspot): boolean {
     return (
       (this.screensLive && hotspot.action.type === "focus-desk") ||
-      (!this.orbitView && hotspot.action.type === "focus-pit")
+      (!this.orbitView && hotspot.action.type === "focus-pit") ||
+      // Zoomed into the tablet, the pad is the whole frame: lighting it up and
+      // offering to zoom in on it is an invitation to somewhere you already are,
+      // and the highlight sits over the cells you are trying to click.
+      (this.padLive && hotspot.action.type === "focus-pad")
     );
   }
 
