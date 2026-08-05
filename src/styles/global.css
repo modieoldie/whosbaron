@@ -296,6 +296,18 @@
   background: rgba(15, 15, 17, 0.92);
   border: 1px solid var(--color-hairline);
   backdrop-filter: blur(16px);
+  /* So a one-line title can be sized against the card's own content width
+     rather than the viewport's — the card is 25rem on a desktop and nearly
+     edge-to-edge on a phone, and the title has to fit both. */
+  container-type: inline-size;
+}
+
+/* Titles that read as one name and lose the join when they wrap. `cqw` is 1% of
+   the card's content box, so the size tracks the box it has to fit in; the
+   `min` keeps it from growing past the 3xl every other card title uses. */
+#card-title[data-one-line] {
+  white-space: nowrap;
+  font-size: min(1.875rem, 6.8cqw);
 }
 
 #card[data-visible="false"] {

@@ -488,6 +488,7 @@ export async function boot() {
     }
     dom.cardEyebrow.textContent = card.eyebrow;
     dom.cardTitle.textContent = card.title;
+    dom.cardTitle.toggleAttribute("data-one-line", card.titleOneLine === true);
     dom.cardBody.textContent = card.body;
 
     dom.cardMeta.innerHTML = "";

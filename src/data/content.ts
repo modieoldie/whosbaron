@@ -20,9 +20,31 @@ export type Project = {
   featured?: boolean;
   repo?: string;
   demo?: string;
+  /**
+   * Set when there is no repository to link *and* none is implied — a project
+   * that is configuration rather than a codebase. Without it a missing `repo`
+   * is reported as a private one, which would be a lie here.
+   */
+  noRepo?: boolean;
 };
 
 export const projects: Project[] = [
+  {
+    title: "Traintopia - Live NYC Transit",
+    period: "Jun 2026 — Present",
+    blurb:
+      "Real-time NYC subway and bus tracking as an Android app: every live train and bus drawn as a 3D vehicle on a map, plus service alerts, trip planning, and a ride-along mode that tells you when to get off. The MTA only publishes positions every 15–20 seconds, so the interesting part is making that look continuous.",
+    stack: ["TypeScript", "Svelte 5", "Capacitor", "Fastify", "Redis", "deck.gl", "MapLibre GL"],
+    bullets: [
+      "Built a Fastify backend that polls eight MTA GTFS-RT protobuf feeds plus the SIRI and OneBusAway bus feeds on staggered BullMQ jobs, then fans ~3,000 live vehicles out over WebSockets with Redis pub/sub as the only shared state — no database, every key on a TTL.",
+      "Wrote the map's animation loop to interpolate each vehicle between polls and snap it onto the real route polyline, so trains glide along the track instead of teleporting to a new dot every 15 seconds.",
+      "Implemented RAPTOR trip planning over a combined subway and bus timetable, built at boot and patched with live trip updates, returning leg-by-leg itineraries you can then ride through each transfer.",
+      "Shipped a ride-along mode on Capacitor's Geolocation, Haptics, and Local Notifications plugins that tracks your position along the stop sequence and fires at two stops, one stop, and arrival — including with the app backgrounded.",
+      "Added Android home-screen widgets for saved stops and routes, served by batched endpoints and refreshed on WorkManager ticks.",
+    ],
+    featured: true,
+    demo: "https://traintopia.whosbaron.com",
+  },
   {
     title: "Web Server & Streaming Platform",
     period: "Jan 2026 — May 2026",
@@ -38,7 +60,7 @@ export const projects: Project[] = [
     featured: true,
   },
   {
-    title: "Karaoke Web Platform",
+    title: "Encore - Karaoke Web Platform",
     period: "Dec 2025",
     blurb:
       "Karaoke in the browser with independently mixable vocal and instrumental tracks, and lyrics that stay locked to the audio. The hard part was sample-accurate sync and per-track gain control in the Web Audio graph.",
@@ -50,7 +72,8 @@ export const projects: Project[] = [
       "Integrated a backend endpoint that ingests YouTube links and processes them into playable karaoke tracks.",
     ],
     featured: true,
-    demo: "https://dwerk-baron.vercel.app/", 
+    demo: "https://encore.whosbaron.com",
+    repo: "https://github.com/modieoldie/encore",
   },
   {
     title: "RecipeByte",
@@ -64,6 +87,7 @@ export const projects: Project[] = [
       "Developed a responsive interface that holds up across desktop and mobile.",
     ],
     featured: true,
+    repo: "https://github.com/modieoldie/RecipeByte",
   },
   {
     title: "Conway's Game of Life",
@@ -74,6 +98,7 @@ export const projects: Project[] = [
     bullets: [
       "Engineered the cell state transition logic to Conway's rules, with careful multi-dimensional array handling and precise output formatting.",
     ],
+    repo: "https://github.com/modieoldie/Conways_Game_Of_Life",
   },
   {
     title: "Smart Home Automation",
@@ -86,6 +111,7 @@ export const projects: Project[] = [
       "Deployed Home Assistant on a virtual machine for scalable management and additional service integrations.",
       "Configured NFC tags as physical cards for one-tap control of individual lights and switches.",
     ],
+    noRepo: true,
   },
 ];
 

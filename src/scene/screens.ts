@@ -243,7 +243,8 @@ abstract class CanvasScreen {
  * ------------------------------------------------------------------ */
 
 const SIDEBAR_W = 400;
-const ROW_H = 88;
+/** Sized so the whole list clears the bottom edge: LIST_TOP + rows ≤ 640. */
+const ROW_H = 84;
 const LIST_TOP = 118;
 
 /**
@@ -515,6 +516,23 @@ export class ProjectsScreen extends CanvasScreen {
         links.push({ href, label, text, x, y, w: LINK_TEXT_X + c.measureText(text).width });
         y += 34;
       }
+    }
+
+    // A missing repo row reads as an oversight otherwise. Laid out on the link
+    // grid so it lines up with the rows above it, but it is a plain item: there
+    // is nowhere for it to go, so it is neither hit-tested nor underlined.
+    if (!project.repo && !project.noRepo) {
+      if (!hrefs.length) y += 6;
+      items.push({ kind: "text", text: "CODE", x, y, font: LINK_FONT, color: CSS.ashDim });
+      items.push({
+        kind: "text",
+        text: "Private repository",
+        x: x + LINK_TEXT_X,
+        y,
+        font: LINK_FONT,
+        color: CSS.ashDim,
+      });
+      y += 34;
     }
 
     return { items, links, height: y + 12 };

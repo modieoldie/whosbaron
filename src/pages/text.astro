@@ -55,17 +55,34 @@ import { profile, projects, experience, education, skills } from "../data/conten
                 </li>
               ))}
             </ul>
-            {project.demo && (
-              <a
-                href={project.demo}
-                target="_blank"
-                rel="noopener noreferrer"
-                class="mt-6 inline-block font-mono text-xs tracking-[0.2em] text-brass uppercase"
-                aria-label={`Live demo for ${project.title} (opens in a new tab)`}
-              >
-                Live demo ↗
-              </a>
-            )}
+            <div class="mt-6 flex flex-wrap items-center gap-x-6 gap-y-2">
+              {project.demo && (
+                <a
+                  href={project.demo}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="font-mono text-xs tracking-[0.2em] text-brass uppercase"
+                  aria-label={`Live demo for ${project.title} (opens in a new tab)`}
+                >
+                  Live demo ↗
+                </a>
+              )}
+              {project.repo ? (
+                <a
+                  href={project.repo}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="font-mono text-xs tracking-[0.2em] text-brass uppercase"
+                  aria-label={`Source code for ${project.title} (opens in a new tab)`}
+                >
+                  Source ↗
+                </a>
+              ) : project.noRepo ? null : (
+                <p class="font-mono text-xs tracking-[0.2em] text-ash-dim uppercase">
+                  Private repository
+                </p>
+              )}
+            </div>
           </article>
         ))
       }

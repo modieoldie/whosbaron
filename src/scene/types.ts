@@ -22,6 +22,12 @@ export type HotspotAction =
 export interface CardContent {
   eyebrow: string;
   title: string;
+  /**
+   * Hold the title to a single line, sizing it down to whatever the card is
+   * wide enough for. For titles that read as one name and lose the join when
+   * they wrap.
+   */
+  titleOneLine?: boolean;
   body: string;
   meta?: string[];
   link?: { label: string; href: string; external?: boolean };

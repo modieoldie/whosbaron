@@ -251,17 +251,18 @@ export function buildProps(
   }
   group.add(headphones);
 
-  const karaoke = byTitle("Karaoke Web Platform");
+  const karaoke = byTitle("Encore - Karaoke Web Platform");
   hotspots.push({
     object: headphones,
     id: "headphones",
-    label: "Karaoke Web Platform",
+    label: karaoke.title,
     highlight: [band],
     action: {
       type: "card",
       card: {
         eyebrow: "Project · " + karaoke.period,
         title: karaoke.title,
+        titleOneLine: true,
         body: karaoke.blurb,
         meta: karaoke.stack,
         link: karaoke.demo ? { label: "Open demo", href: karaoke.demo, external: true } : undefined,
